@@ -1,0 +1,947 @@
+---
+title: "Time Series_Midterm_Practice"
+author: "Anurag"
+format: html
+editor: visual
+---
+
+## Downloading data from Yahoo Finance
+
+```{r}
+#remove.packages("pdfetch")
+#install.packages("pdfetch")
+library(pdfetch)
+```
+
+```{r}
+nifty_50 <-  pdfetch_YAHOO("^NSEI")
+nifty_50
+```
+
+```{r}
+plot(nifty_50$`^NSEI.close`)
+```
+
+## Another method to download the data
+
+```{r}
+#install.packages("quantmod")
+library(quantmod)
+```
+
+```{r}
+getSymbols("^NSEI", open= "2021-01-01", close = "2026-09-19")
+View(NSEI)
+```
+
+```{r}
+plot.ts(NSEI$NSEI.Close)
+```
+
+```{r}
+## Downloading multiple dataset
+library(pdfetch)
+x=pdfetch_YAHOO(c("^NSEI","ITC.NS","SBIN.NS","RELIANCE.NS"),
+                "close",from="2015-01-01",to="2026-08-05")
+View(x)
+data=read.delim("clipboard")
+data
+```
+
+```{r}
+data("AirPassengers")
+air<- AirPassengers
+str(air)
+
+```
+
+```{r}
+head(air)
+```
+
+```{r}
+ts(air, frequency = 12, start=c(1949,1))
+```
+
+```{r}
+attributes(air)
+```
+
+```{r}
+# Log Transformation
+
+lair<- log(air)
+lair
+```
+
+```{r}
+decomp <- decompose(air)
+decomp$figure
+plot(decomp$figure,
+     type = 'b',
+     xlab= 'Month',
+     ylab= "Seasonality Index",
+     col = "blue",
+     las = 2)
+
+plot(decomp)
+```
+
+#### Interpretation:
+
+#### Seasonality Plot
+
+- Under an additive decomposition, July tends to be approximately 64 units higher than the underlying trend, purely because of seasonal effects.
+- November tends to be approximately 54 units below the underlying trend because of seasonality.
+- July to September, there is increasing effect and October to December its showing declining effect.
+
+#### Decomposition Plot
+
+- The additive decomposition indicates that the time series contains three major systematic features: a strong upward trend, a pronounced and recurring 12-month seasonal pattern, and an irregular component fluctuating around zero. The trend component shows sustained growth over the study period, while the seasonal component exhibits a highly consistent pattern, with positive effects during the middle months of the year and negative effects toward the beginning and end of the year. The residual component does not display a clear systematic pattern, although its variability appears to increase in the later period.
+
+#########################################Data Set###############################################
+
+```{r}
+library(readxl)
+nft_50 <- read_excel("D:/Msc BA Classnotes/Sem 3/Time series Analysis/Nifty 50.xlsx")
+nft_50
+```
+
+```{r}
+nft_50$Date <- as.Date(nft_50$Date)
+```
+
+```{r}
+names(nft_50)<- c('Date','Price')
+```
+
+```{r}
+nft_50 <- nft_50[order(nft_50$Date),]
+```
+
+```{r}
+nft_50<- na.omit(nft_50)
+```
+
+```{r}
+#plotting original daily price
+
+plot(nft_50$Date, nft_50$Price, type = "l",
+     main = "Nifty 50", xlab ="Date", ylab="Price")
+```
+
+```{r}
+## Moving Average
+#install.packages("TTR")
+#install.packages("dygraphs")
+library(TTR)
+library(dygraphs)
+```
+
+```{r}
+nft_50$ma_5 <- SMA(nft_50$Price, 5)
+nft_50$ma_30 <- SMA(nft_50$Price, 30)
+nft_50$ma_90 <- SMA(nft_50$Price, 90)
+
+```
+
+```{r}
+# Convert to xts
+data_xts <- xts::xts(
+  nft_50[, c("Price", "ma_5", "ma_30", "ma_90")],
+  order.by = nft_50$Date
+)
+
+# Interactive plot
+dygraph(data_xts, main = "Nifty 50 Moving Averages") %>%
+  dyRangeSelector()
+```
+
+#### Least-squares Method
+
+```{r}
+nft_50$t <- 1:nrow(nft_50)
+
+model <- lm(Price ~ t, data = nft_50)
+
+nft_50$LS_Trend <- fitted(model)
+
+ls_xts <- xts(
+  nft_50[, c("Price", "LS_Trend")],
+  order.by = nft_50$Date
+)
+
+dygraph(ls_xts, main = "Nifty 50: Least Squares Trend") %>%
+  dyRangeSelector()
+
+```
+
+#### Semi averages
+
+```{r}
+n <- nrow(nft_50)
+h <- floor(n / 2)
+
+mean1 <- mean(nft_50$Price[1:h])
+mean2 <- mean(nft_50$Price[(h + 1):n])
+
+nft_50$SemiAvg <- c(
+  rep(mean1, h),
+  rep(mean2, n - h)
+)
+
+semi_xts <- xts(
+  nft_50[, c("Price", "SemiAvg")],
+  order.by = nft_50$Date
+)
+
+dygraph(semi_xts, main = "Nifty 50: Semi-Average Trend") %>%
+  dyRangeSelector()
+```
+
+##################################--ARIMA--#################################################### ##Required libraries
+
+```{r}
+library(zoo)
+library(readxl)
+library(forecast)
+library(tseries)
+library(zoo)
+library(dygraphs)
+```
+
+## Data import
+
+```{r}
+nift <- read_excel("D:/Msc BA Classnotes/Sem 3/Time series Analysis/Nifty 50.xlsx")
+nift
+```
+
+### Data Cleaning
+
+```{r}
+nift$Date <- as.Date(nift$Date)
+nift <- na.omit(nift)
+```
+
+```{r}
+nift$Price <- as.numeric(gsub(",","", nift$Price))
+```
+
+## Converting data to zoo series
+
+```{r}
+nft_y <- zoo(nift$Price, order.by = nift$Date)
+```
+
+```{r}
+nft_y <- ts(coredata(nft_y))
+```
+
+### Performing Stationary test
+
+$$
+\begin{aligned}
+  H_0 &: \text{The time series is non-stationary (contains a unit root)} \\
+  H_1 &: \text{The time series is stationary}
+\end{aligned}
+$$
+
+```{r}
+adf.test(nft_y)
+```
+
+#### Interpretation:
+
+- As the p-value is greater than 0.05, we fail to reject the null hypothesis and conclude that the data is non stationary.
+
+```{r}
+kpss.test(nft_y)
+```
+
+#### Interpretation:
+
+- Given the p-value is less than 0.05, we reject the null hypothesis and conclude that data is non stationary.
+
+## Converting data to stationary series
+
+```{r}
+nft_yy <- diff(nft_y)
+```
+
+## Further checking stationarity
+
+```{r}
+adf.test(nft_yy)
+```
+
+## Removing Na values from the difference series
+
+```{r}
+nft_yy_clean <- na.omit(nft_yy)
+```
+
+#### Interpretation:
+
+- As the p-value is less than 0.05, we reject the null hypothesis concluding that data is stationary at first order difference.
+
+## Performing ACF & PACF plot
+
+```{r}
+#ACF for MA term
+#PACF for AR term
+acf(nft_yy_clean, main="ACF of first differenced series", na.action = na.pass)
+pacf(nft_yy_clean, main="PACF of first differenced series", na.action = na.pass)
+```
+
+### Manually estimating candidate ARIMA models
+
+```{r}
+m1 <-  Arima(nft_y, order = c(0,1,1))
+m2 <-  Arima(nft_y, order = c(1,1,1))
+m3 <-  Arima(nft_y, order = c(1,1,1))
+m4 <-  Arima(nft_y, order = c(2,1,1))
+```
+
+### Comparing AIC & BIC values
+
+```{r}
+AIC(m1,m2,m3,m4)
+BIC(m1,m2,m3,m4)
+```
+
+#### Interpretation:
+
+- Based on AIC and BIC values, model1 , i.e m1 appears to be the efficient one.
+
+### Checking Model Accuracy
+
+```{r}
+cat("Accuracy ARIMA model m1:\n")
+print(accuracy(m1))
+cat("Accuracy ARIMA model m2:\n")
+print(accuracy(m2))
+cat("Accuracy ARIMA model m3:\n")
+print(accuracy(m3))
+cat("Accuracy ARIMA model m4:\n")
+print(accuracy(m4))
+```
+#### Interpretation
+
+* Among the four models, m4 produces the lowest training RMSE, MAE and MAPE. However, the differences in accuracy across the models are very small. Therefore, model selection should not be based solely on these training-set accuracy measures; residual diagnostics and out-of-sample forecasting performance should also be considered.
+
+### Model Diagnostics
+
+```{r}
+checkresiduals(m1)
+```
+
+### Model forecasting
+
+```{r}
+fc_m1 <- forecast(m1, h = 500)
+```
+
+### Plotting the forecasted values
+
+```{r}
+plot(fc_m1, main = "ARIMA forecast", xlab = "Time", ylab = "Price" )
+```
+
+### Creating future dates with the SAME length as forecast horizon
+
+
+```{r}
+last_date <- max(nift$Date)
+future_dates <- seq.Date(from = last_date + 1, 
+                         by = "day", length.out = length(fc_m1$mean))
+```
+
+### Forecast dataframe
+
+```{r}
+fc_nift <- data.frame(
+  Date = future_dates,
+  Forecast = as.numeric(fc_m1$mean)
+)
+```
+
+### Actual dataframe
+
+```{r}
+actual_nift <- data.frame(
+  Date = nift$Date,
+  Price = nift$Price
+)
+```
+
+### Plot actual and forecast
+```{r}
+library(ggplot2)
+ggplot() +
+  geom_line(data = actual_nift, aes(x = Date, y = Price), color = "blue", 
+            linewidth = 1) +
+  geom_line(data = fc_nift, aes(x = Date, y = Forecast), color = "red", 
+            linewidth = 1) +
+  labs(
+    title = "Actual Series with ARIMA Forecast",
+    x = "Date",
+    y = "Price"
+  ) +
+  theme_minimal()+
+  theme(
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
+    plot.title   = element_text(hjust = 0.5)
+  )
+```
+
+###################################Auto-ARIMA##################################################
+##Out-sample
+
+```{r}
+# Load libraries
+library(readxl)
+library(dplyr)
+library(zoo)
+library(forecast)
+library(ggplot2)
+```
+
+## Data import
+
+```{r}
+data_os <-  read_xlsx("D:/Msc BA Classnotes/Sem 3/Time series Analysis/Nifty 50.xlsx")
+data_os
+```
+
+### Data Cleaning
+
+```{r}
+# Clean data
+data_os$Date  <- as.Date(data_os$Date)
+data_os$Price <- as.numeric(gsub(",", "", data_os$Price))
+data_os <- data_os %>%
+  arrange(Date) %>%
+  na.omit()
+```
+
+# Creating zoo series
+
+```{r}
+zoo_price <- zoo(data_os$Price, order.by = data_os$Date)
+```
+
+# Plot zoo series
+
+```{r}
+plot(zoo_price,
+     main = "Nifty 50 Daily Price (Zoo Series)",
+     xlab = "Date",
+     ylab = "Price",
+     col  = "blue",
+     lwd  = 2)
+```
+### Convert to ts for ARIMA fitting
+
+```{r}
+ts_price <- ts(coredata(zoo_price))
+```
+
+### Fit ARIMA
+
+```{r}
+
+fit_full <- auto.arima(ts_price)
+summary(fit_full)
+```
+### Forecast 200 periods
+
+```{r}
+h <- 200
+fc_full <- forecast(fit_full, h = h)
+```
+
+### Create future dates 
+
+```{r}
+last_date    <- max(index(zoo_price))
+future_dates <- seq.Date(from = last_date + 1,
+                         by   = "day",
+                         length.out = h)
+```
+
+### Combine forecast data with dates
+
+```{r}
+fc_df <- data.frame(
+  Date     = future_dates,
+  Forecast = as.numeric(fc_full$mean)
+)
+```
+
+### Plot using ggplot so x-axis shows dates
+
+```{r}
+ggplot() +
+  geom_line(data = data_os,
+            aes(x = Date, y = Price),
+            color     = "black",
+            linewidth = 1) +
+  geom_line(data = fc_df,
+            aes(x = Date, y = Forecast),
+            color     = "red",
+            linewidth = 1)+
+  labs(
+    title = "Out-of-sample ARIMA Forecast",
+    x     = "Date",
+    y     = "Price"
+  ) +
+  theme_minimal() +
+  theme(
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
+    plot.title   = element_text(hjust = 0.5)
+  )
+```
+### In Sample ARIMA
+
+### Loaded libraries
+
+```{r}
+library(readxl)
+library(forecast)
+library(ggplot2)
+library(dplyr)
+library(zoo)
+library(tidyr)
+```
+
+### Data Import
+
+```{r}
+data_is <- read_xlsx("D:/Msc BA Classnotes/Sem 3/Time series Analysis/Nifty 50.xlsx")
+data_is
+```
+### Clean data
+
+```{r}
+data_is$Date <- as.Date(data_is$Date)
+data_is$Price <- as.numeric(gsub(",", "", data_is$Price))
+data_is <- data_is %>%
+  arrange(Date) %>%
+  na.omit()
+```
+
+### Create zoo series
+
+```{r}
+zoo_price_is <- zoo(data_is$Price, order.by = data_is$Date)
+```
+
+### Split into 80% estimation and 20% forecast
+
+```{r}
+n <- length(zoo_price_is)
+train_size <- floor(0.8 * n)
+train_zoo <- zoo_price_is[1:train_size]
+```
+
+```{r}
+test_zoo <- zoo_price_is[(train_size + 1):n]
+```
+
+### Converting zoo to ts for ARIMA
+
+```{r}
+train_ts <- ts(coredata(train_zoo))
+```
+
+### Fit ARIMA on training sample
+
+```{r}
+fit_train <- auto.arima(train_ts)
+summary(fit_train)
+```
+### Forecast 20% holdout period
+
+```{r}
+fc_20 <- forecast(fit_train, h = length(test_zoo))
+```
+
+### Creating holdout results
+
+```{r}
+result_20 <- data.frame(
+  Date = index(test_zoo),
+  Actual = as.numeric(coredata(test_zoo)),
+  Forecast = as.numeric(fc_20$mean)
+)
+```
+
+### Create full actual series data frame
+
+```{r}
+full_actual <- data.frame(
+  Date = index(zoo_price),
+  Price = as.numeric(coredata(zoo_price))
+)
+```
+
+### Plot full actual series + 20% forecast
+
+```{r}
+ggplot() +
+  geom_line(data = full_actual, aes(x = Date, y = Price), color = "black", linewidth = 1) +
+  geom_line(data = result_20, aes(x = Date, y = Forecast), color = "red", linewidth = 1)+
+  labs(
+    title = "Nifty 50: Full Actual Series with 20% ARIMA Forecast",
+    x = "Date",
+    y = "Price"
+  ) +
+  theme_minimal() +
+  theme(
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 1)
+  )
+```
+### Accuracy measures for holdout
+
+```{r}
+mae_20 <- mean(abs(result_20$Actual - result_20$Forecast), na.rm = TRUE)
+rmse_20 <- sqrt(mean((result_20$Actual - result_20$Forecast)^2, na.rm = TRUE))
+
+cat("MAE:", mae_20, "\n")
+cat("RMSE:", rmse_20, "\n")
+```
+
+
+
+#########################################VAR_VECM##############################################
+
+## Sector wise time series analysis
+
+```{r}
+library(readxl)
+sector <- read_xlsx("D:/Msc BA Classnotes/Sem 3/Time series Analysis/SECTOR WISE.xlsx")
+sector
+```
+
+## Data cleaning
+
+```{r}
+# Convert Date
+sector$Date <- as.Date(sector$Date)
+
+# Remove missing observations
+sector <- na.omit(sector)
+```
+
+##Converting data into zoo series
+
+```{r}
+library(zoo)
+sec_z <- zoo(sector[,-1], order.by = sector$Date)
+plot(sec_z)
+```
+
+### Checking summary statistics
+
+```{r}
+summary(sec_z)
+```
+
+### Checking peakedness and spread of data
+
+```{r}
+library(moments)
+skewness(sec_z)
+```
+
+#### Interpretation:
+
+- All the sectors appear to be rightly skewed however Auto sector has more skewness towards right.
+
+```{r}
+kurtosis(sec_z)
+```
+
+#### Interpretation:
+
+- Except autosector, all other sectors have kurtosis less than 3 which means they are platykurtic with lesser tails or fewers extreme observations. Autosector is showing leptokurtic nature.
+
+```{r}
+par(mfrow = c(3, 2))
+
+for(i in 1:ncol(sec_z)) {
+  
+  plot(sec_z[, i],
+       main = colnames(sec_z)[i],
+       xlab = "Date",
+       ylab = "Value",
+       col = "blue")
+}
+```
+
+### Performing stationary test using ADF test
+
+$$
+\begin{aligned}
+H_0&:\text{Data is non stationary} \\
+H_1&:\text{Data is stationary}
+\end{aligned}
+$$
+
+```{r}
+adf.test(sec_z$Healthcare)
+adf.test(sec_z$FMCG)
+adf.test(sec_z$FS)
+adf.test(sec_z$Auto)
+adf.test(sec_z$Bank)
+```
+
+- The p-value is greater than 0.05, we fail to reject null hypothesis, there by concluding the data is non stationary.
+
+- To validate further let's perform kpss test
+
+### KPSS Test
+
+$$ 
+\begin{aligned}
+H_0&: \text{Data is stationary} \\ 
+H_1&: \text{Data is non stationary}
+\end{aligned}
+$$
+
+```{r}
+kpss.test(sec_z$Healthcare)
+kpss.test(sec_z$FMCG)
+kpss.test(sec_z$FS)
+kpss.test(sec_z$Auto)
+kpss.test(sec_z$Bank)
+```
+
+- The p-value is less than 0.01, we reject the null hypothesis that data is stationary and hereby conclude that the series is non-stationary.
+
+#### Generating return series
+
+```{r}
+ret_health <- diff(log(sec_z$Healthcare))
+ret_fmcg <- diff(log(sec_z$FMCG))
+ret_fs <- diff(log(sec_z$FS))
+ret_auto <- diff(log(sec_z$Auto))
+ret_bank <- diff(log(sec_z$Bank))
+```
+
+## Performing stationarity test on return series
+
+```{r}
+adf.test(ret_health)
+adf.test(ret_fmcg)
+adf.test(ret_fs)
+adf.test(ret_auto)
+adf.test(ret_bank)
+```
+
+- The p-value is less than 0.05, so we reject the null hypothesis, thereby concluding that series is stationary.
+
+### Combining the return series
+
+```{r}
+sec_y <- cbind(ret_health , ret_fmcg, ret_fs, ret_auto, ret_bank)
+sec_y
+```
+
+```{r}
+plot(sec_y)
+```
+
+#### Interpretation:
+
+The return series of the Healthcare, FMCG, Financial Services, Auto and Banking sectors fluctuate around zero without exhibiting a clear long-term trend. The series display occasional extreme positive and negative returns and periods of volatility clustering, with particularly pronounced fluctuations around 2020. The simultaneous large movements across several sectors suggest the presence of cross-sector dependence and common market shocks. Overall, the return series appear substantially more stable than the corresponding index-level series, supporting their use in subsequent time-series and volatility analysis.
+
+### Lag selection
+
+```{r}
+library(vars)
+library(mFilter)
+```
+
+```{r}
+lagselect <- VARselect(sec_y, lag.max = 10, type= "const")
+lagselect
+```
+
+#### Interpretation:
+
+\*\* The optimal lag-order selection criteria provide mixed results. The AIC and FPE criteria suggest seven lags, whereas the HQ and Schwarz (SC/BIC) criteria suggest one lag. Since the HQ and SC criteria both select one lag and favour a more parsimonious model, one lag may be considered as the preferred specification, subject to diagnostic testing.
+
+### Performing Johansen's cointegration test
+
+$$
+\begin{aligned}
+H_0&: \text{ There are no cointegration relationships}\\
+H_1&: \text{ There are cointegration relationships}
+\end{aligned}
+$$
+
+```{r}
+## Assuming lag as 2
+
+library(tidyverse)
+library(forecast)
+library(urca)
+
+jo_test <- ca.jo(sec_z,
+                 type = "trace",
+                 ecdet ="trend",
+                 K = 2)
+```
+
+### Checking the summary
+
+```{r}
+summary(jo_test)
+```
+
+#### Interpretation:
+
+* We can observe that when r = 0, the test statistic(**97.99**) \> (**87.31**) so we reject the null hypothesis and hereby conclude that there is at-least one cointegrating relationship. Checking further values of r, we can conclude that there is atmost one cointegrating relationship. Even if the sectors show short term relationship between them, there can be mild long run relationship between the sectors.
+
+### Performing VECM test
+
+```{r}
+library(urca)
+vecm_model <- cajorls(jo_test, r =1)
+summary(vecm_model$rlm)
+```
+#### Interpretation: 
+
+** The VECM results indicate that the long-run equilibrium relationship is statistically significant for four of the five sectors. The error-correction coefficients for Healthcare (−0.000108, p < 0.001), Financial Services (−0.000207, p < 0.001), Auto (−0.000297, p < 0.001), and Bank (−0.000559, p < 0.001) are negative and statistically significant, indicating that these sectors adjust toward the long-run equilibrium following a deviation. Among these sectors, Banking exhibits the largest absolute adjustment coefficient, suggesting the strongest adjustment response, followed by Auto, Financial Services and Healthcare. In contrast, the error-correction coefficient for FMCG is statistically insignificant (p = 0.832), indicating that FMCG does not significantly adjust to restore the long-run equilibrium. The short-run dynamics are comparatively limited, with significant lagged effects primarily involving Healthcare, Financial Services and Banking.
+
+### Performing VAR test
+
+```{r}
+VAR1 <- VAR(sec_y, lag.max =1, type = "const",
+            season = NULL , exog = NULL)
+summary(VAR1)
+```
+```{r}
+library(stargazer)
+stargazer(VAR1[["varresult"]], type = "text")
+```
+#### Interpretation: 
+
+** The estimated VAR(1) model is stable, meaning that shocks to the system are not expected to persist indefinitely and the model is suitable for further VAR-based analysis such as impulse response and forecast error variance decomposition.
+
+** In the Healthcare equation, only the lagged Healthcare return is statistically significant (β = 0.0677, p < 0.01), indicating limited short-run persistence in Healthcare returns. Lagged returns of FMCG, Financial Services, Auto and Bank do not have statistically significant effects on current Healthcare returns.
+
+** There is no statistically significant evidence that the previous day's returns of any of the five sectors explain current FMCG returns.
+
+** The Financial Services equation shows significant short-run dependence on lagged Healthcare and Banking returns. Lagged Healthcare returns have a negative association with current Financial Services returns (β = −0.0659, p = 0.0119), while lagged Banking returns have a positive association (β = 0.1920, p = 0.0039). The lagged FS return itself is marginally significant at the 10% level.
+
+** Current Auto returns show weak evidence of dependence on lagged Financial Services returns, with a positive coefficient of 0.1155 (p = 0.0904). However, this relationship is only marginally significant at the 10% level.
+
+** The Banking equation indicates significant dependence on lagged Healthcare and Banking returns. Lagged Healthcare returns have a negative association with current Banking returns (β = −0.0711, p = 0.0100), while lagged Banking returns have a positive association (β = 0.1893, p = 0.0069), indicating short-run persistence in Banking returns.
+
+** Overall, the results suggest that cross-sector interdependence is stronger within the same trading period than through one-day lagged return transmission.
+
+### Model Diagnostics
+
+```{r}
+## Diagnostics for stable model
+roots(VAR1, modulus = TRUE) ## values to be less than one 
+
+## Diagnostic test for VAR serial correlation
+serial1 = serial.test(VAR1, lags.pt = 10, type= "PT.asymptotic")
+serial1
+
+##Diagnostic test for VAR heteroscedasticity 
+
+ARCH1 = arch.test(VAR1, lags.multi = 10, multivariate.only = TRUE)
+ARCH1
+
+## Diagnostic for VAR Normality
+NORM1 = normality.test(VAR1, multivariate.only = TRUE)
+NORM1
+## Diagnostic for stability 
+stability1 = stability(VAR1, type = "OLS-CUSUM")
+stability1
+
+plot(stability1)
+```
+#### Interpretation:
+
+** The OLS-CUSUM stability plots indicate that the empirical fluctuation processes for all five equations remain within the critical boundaries throughout the sample period. This suggests that there is no significant evidence of parameter instability or structural breaks in the estimated relationships. Although some fluctuations are visible, particularly for the Auto equation during the later part of the sample, none of the processes crosses the critical boundaries. Hence, the estimated model demonstrates satisfactory parameter stability over the study period.
+
+### Granger-Causality test
+
+```{r}
+Granger1 = causality(VAR1, cause = "ret_auto")
+Granger1
+```
+```{r}
+Granger2 = causality(VAR1, cause = "ret_health")
+Granger2
+```
+```{r}
+Granger3 = causality(VAR1, cause = "ret_fs")
+Granger3
+```
+```{r}
+Granger4 = causality(VAR1, cause = "ret_bank")
+Granger4
+```
+```{r}
+Granger5 = causality(VAR1, cause = "ret_fmcg")
+Granger5
+```
+
+### Impulse Response Function
+
+```{r}
+AUTOIRF_1 = irf(VAR1, impulse = "ret_bank", response  = "ret_auto",
+              n.ahead = 10, boot =TRUE) 
+
+plot(AUTOIRF_1, ylab = "ret_auto", mail = "shock from ret_bank")
+```
+
+```{r}
+AUTOIRF_2 = irf(VAR1, impulse = "ret_auto", response  = "ret_bank",
+              n.ahead = 10, boot =TRUE) 
+
+plot(AUTOIRF_2, ylab = "ret_bank", mail = "shock from ret_auto")
+```
+
+#### Interpretation:
+
+** 1 std.dev shock given to bank auto responded negatively for first 2 period and becomes positive for 3rd day.
+** 1 std.dev shock given to auto, bank responded positively for first 3 period and then market corrected.
+
+```{r}
+IRF_ALL = irf(VAR1, impulse = colnames(sec_y), 
+              response = colnames(sec_y),
+              n.ahead = 10,
+              boot = TRUE, 
+              ci = 0.95,
+              runs = 100)
+IRF_ALL
+```
+### Variance Decomposition
+
+```{r}
+library(tsDyn)
+FEVDI = fevd(VAR1, n.ahead = 10)
+```
+```{r}
+plot(FEVDI)
+```
+
+```{r}
+FEVDI[["ret_health"]]
+FEVDI[["ret_fmcg"]]
+FEVDI[["ret_fs"]]
+FEVDI[["ret_auto"]]
+FEVDI["ret_bank"]
+```
+#### Interpretation:
+
+* The FEVD results indicate that the forecast error variance of Healthcare returns is predominantly explained by its own innovations. At the first forecast horizon, 100% of the variance is attributable to shocks in Healthcare itself. By the second horizon, approximately 99.95% remains attributable to Healthcare shocks, while FMCG and Bank contribute only around 0.023% and 0.022%, respectively. The contributions of FS and Auto are negligible. From the third horizon onward, the decomposition remains virtually unchanged, indicating that cross-sector shocks have very limited explanatory power for the forecast error variance of Healthcare returns within the model.
+
