@@ -11,6 +11,7 @@ install.packages(c(
   "pdfetch",
   "quantmod",
   "FinTs",
+"tidyr",
   "tidyverse",
   "ggplot2",
   "readxl",
@@ -24,7 +25,8 @@ install.packages(c(
   "dplyr",
   "urca",
   "vars",
-  "stargazer"
+  "stargazer",
+"mFilter"
 ))
 
 # ============================================================
