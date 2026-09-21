@@ -5,6 +5,50 @@ format: html
 editor: visual
 ---
 
+## Package install
+
+install.packages(c(
+  "pdfetch",
+  "quantmod",
+  "FinTs",
+  "tidyverse",
+  "ggplot2",
+  "readxl",
+  "TTR",
+  "xts",
+  "dygraphs",
+  "zoo",
+  "forecast",
+  "tsDyn",
+  "tseries",
+  "dplyr",
+  "urca",
+  "vars",
+  "stargazer"
+))
+
+# ============================================================
+# LOAD REQUIRED PACKAGES
+# ============================================================
+
+library(pdfetch)
+library(quantmod)
+library(FinTs)
+library(tidyverse)
+library(ggplot2)
+library(readxl)
+library(TTR)
+library(xts)
+library(dygraphs)
+library(zoo)
+library(forecast)
+library(tsDyn)
+library(tseries)
+library(dplyr)
+library(urca)
+library(vars)
+library(stargazer)
+
 ## Downloading data from Yahoo Finance
 
 ```{r}
