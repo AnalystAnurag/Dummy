@@ -1211,3 +1211,17 @@ level_map = {
 
 df["Level_Encoded"] = df["Level"].map(level_map)
 
+####### Outlier Treatment#######
+for col in num_cols:
+
+    Q1 = X_train[col].quantile(0.25)
+    Q3 = X_train[col].quantile(0.75)
+
+    IQR = Q3 - Q1
+
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+
+    X_train[col] = X_train[col].clip(lower_bound, upper_bound)
+    X_test[col] = X_test[col].clip(lower_bound, upper_bound)
+
