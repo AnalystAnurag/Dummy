@@ -1,0 +1,299 @@
+
+==============================================================================
+STEP 1 — NOTEBOOK CODE CELL 1
+==============================================================================
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import yfinance as yf
+
+==============================================================================
+STEP 2 — NOTEBOOK CODE CELL 3
+==============================================================================
+
+tickers = [
+    'BAJAJ-AUTO.NS', 'TRENT.NS', 'SHRIRAMFIN.NS',
+    'BEL.NS', 'LT.NS', 'TITAN.NS', 'MAXHEALTH.NS',
+    'EICHERMOT.NS', 'TECHM.NS', 'SUNPHARMA.NS'
+]
+
+market_ticker = "^NSEI"
+all_tickers = tickers + [market_ticker]
+
+data = yf.download(
+    all_tickers,
+    start="2020-10-01",
+    end="2026-10-01",
+    auto_adjust=True,
+    progress=False
+)
+
+prices = data["Close"]
+prices = prices.dropna()
+
+stock_prices = prices[tickers]
+market_prices = prices[market_ticker]
+
+print("Stock price data shape:", stock_prices.shape)
+print("Market price data shape:", market_prices.shape)
+print("Start date:", prices.index.min())
+print("End date:", prices.index.max())
+print("Missing values:", prices.isna().sum().sum())
+
+==============================================================================
+STEP 3 — NOTEBOOK CODE CELL 5
+==============================================================================
+
+daily_returns = stock_prices.pct_change().dropna()
+market_return = market_prices.pct_change().dropna()
+
+# Align stock and market returns to common dates
+common_dates = daily_returns.index.intersection(market_return.index)
+
+daily_returns = daily_returns.loc[common_dates]
+market_return = market_return.loc[common_dates]
+
+print("Daily returns shape:", daily_returns.shape)
+print("Market returns shape:", market_return.shape)
+
+display(daily_returns.head())
+
+==============================================================================
+STEP 4 — NOTEBOOK CODE CELL 7
+==============================================================================
+
+trading_days = 252
+
+annualised_return = daily_returns.mean() * trading_days
+market_annualised_return = market_return.mean() * trading_days
+
+print("Annualized expected returns:")
+display((annualised_return * 100).round(2).astype(str) + "%")
+
+print(
+    "Nifty 50 annualized return:",
+    round(market_annualised_return * 100, 2), "%"
+)
+
+==============================================================================
+STEP 5 — NOTEBOOK CODE CELL 9
+==============================================================================
+
+cov_matrix = daily_returns.cov() * trading_days
+
+print("Covariance matrix shape:", cov_matrix.shape)
+display(cov_matrix.round(6))
+
+==============================================================================
+STEP 6 — NOTEBOOK CODE CELL 10
+==============================================================================
+
+market_annualised_return = market_return.mean()*252
+
+==============================================================================
+STEP 7 — NOTEBOOK CODE CELL 12
+==============================================================================
+
+Rf_rate = 0.06
+
+n_assets = len(annualised_return)
+n_portfolios = 20000
+
+np.random.seed(42)
+
+stocks_weights = np.random.dirichlet(
+    np.ones(n_assets), n_portfolios
+)
+
+# Annualized return for each portfolio
+port_returns = stocks_weights @ annualised_return.values
+
+# Annualized variance and volatility for each portfolio
+port_variance = np.einsum(
+    'ij,jk,ik->i',
+    stocks_weights,
+    cov_matrix.values,
+    stocks_weights
+)
+
+port_risk = np.sqrt(port_variance)
+
+# Sharpe ratio for each portfolio
+port_sharpe = (port_returns - Rf_rate) / port_risk
+
+print("Number of simulated portfolios:", len(port_returns))
+print("Weights sum to 1:", np.allclose(stocks_weights.sum(axis=1), 1))
+print("All portfolio risks are valid:", np.all(port_risk >= 0))
+
+==============================================================================
+STEP 8 — NOTEBOOK CODE CELL 14
+==============================================================================
+
+port_max_sharpe_index = np.argmax(port_sharpe)
+port_min_risk_index = np.argmin(port_risk)
+
+best_weights = pd.Series(
+    stocks_weights[port_max_sharpe_index],
+    index=annualised_return.index,
+    name="Maximum Sharpe"
+)
+
+min_risk_weights = pd.Series(
+    stocks_weights[port_min_risk_index],
+    index=annualised_return.index,
+    name="Minimum Risk"
+)
+
+print("Maximum-Sharpe portfolio")
+print("Return:", f"{port_returns[port_max_sharpe_index] * 100:.2f}%")
+print("Risk:", f"{port_risk[port_max_sharpe_index] * 100:.2f}%")
+print("Sharpe ratio:", f"{port_sharpe[port_max_sharpe_index]:.4f}")
+
+print("\nMinimum-risk portfolio")
+print("Return:", f"{port_returns[port_min_risk_index] * 100:.2f}%")
+print("Risk:", f"{port_risk[port_min_risk_index] * 100:.2f}%")
+print("Sharpe ratio:", f"{port_sharpe[port_min_risk_index]:.4f}")
+
+print("\nMaximum-Sharpe portfolio weights:")
+display((best_weights * 100).round(2))
+
+print("Minimum-risk portfolio weights:")
+display((min_risk_weights * 100).round(2))
+
+==============================================================================
+STEP 9 — NOTEBOOK CODE CELL 16
+==============================================================================
+
+plt.figure(figsize=(10, 6))
+
+plt.scatter(
+    port_risk * 100,
+    port_returns * 100,
+    c=port_sharpe,
+    cmap="viridis",
+    s=6,
+    alpha=0.5
+)
+
+plt.colorbar(label="Sharpe Ratio")
+
+plt.scatter(
+    port_risk[port_max_sharpe_index] * 100,
+    port_returns[port_max_sharpe_index] * 100,
+    marker="*",
+    s=300,
+    edgecolor="black",
+    label="Maximum Sharpe"
+)
+
+plt.scatter(
+    port_risk[port_min_risk_index] * 100,
+    port_returns[port_min_risk_index] * 100,
+    marker="*",
+    s=300,
+    edgecolor="black",
+    label="Minimum Risk"
+)
+
+plt.xlabel("Annualized Volatility (%)")
+plt.ylabel("Annualized Expected Return (%)")
+plt.title("Monte Carlo Portfolio Simulation")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+==============================================================================
+STEP 10 — NOTEBOOK CODE CELL 18
+==============================================================================
+
+market_variance = market_return.var()
+
+betas = daily_returns.apply(
+    lambda stock: stock.cov(market_return) / market_variance
+)
+
+betas = betas.reindex(annualised_return.index)
+
+print("Individual stock betas against Nifty 50:")
+display(betas.round(4))
+
+==============================================================================
+STEP 11 — NOTEBOOK CODE CELL 20
+==============================================================================
+
+portfolio_betas = stocks_weights @ betas.values
+
+# Beta of the maximum-Sharpe portfolio
+portfolio_beta = portfolio_betas[port_max_sharpe_index]
+
+print("Maximum-Sharpe portfolio beta:", round(portfolio_beta, 4))
+
+==============================================================================
+STEP 12 — NOTEBOOK CODE CELL 22
+==============================================================================
+
+# Sharpe ratio: excess return per unit of total risk
+sharpe_ratios = (port_returns - Rf_rate) / port_risk
+
+# Treynor ratio: excess return per unit of systematic risk
+treynor_ratios = np.divide(
+    port_returns - Rf_rate,
+    portfolio_betas,
+    out=np.full_like(port_returns, np.nan),
+    where=~np.isclose(portfolio_betas, 0)
+)
+
+print("Maximum-Sharpe portfolio Sharpe ratio:",
+      round(sharpe_ratios[port_max_sharpe_index], 4))
+
+print("Maximum-Sharpe portfolio Treynor ratio:",
+      round(treynor_ratios[port_max_sharpe_index], 4))
+
+print("Minimum-risk portfolio Sharpe ratio:",
+      round(sharpe_ratios[port_min_risk_index], 4))
+
+print("Minimum-risk portfolio Treynor ratio:",
+      round(treynor_ratios[port_min_risk_index], 4))
+
+==============================================================================
+STEP 13 — NOTEBOOK CODE CELL 24
+==============================================================================
+
+# CAPM-predicted annualized return for each portfolio
+capm_predicted_returns = (
+    Rf_rate
+    + portfolio_betas * (market_annualised_return - Rf_rate)
+)
+
+# Jensen's Alpha for each portfolio
+jensens_alpha = port_returns - capm_predicted_returns
+
+# Evaluate the maximum-Sharpe portfolio
+selected_return = port_returns[port_max_sharpe_index]
+selected_beta = portfolio_betas[port_max_sharpe_index]
+selected_capm_return = capm_predicted_returns[port_max_sharpe_index]
+selected_alpha = jensens_alpha[port_max_sharpe_index]
+
+print("Nifty 50 annualized return:",
+      f"{market_annualised_return * 100:.2f}%")
+
+print("Selected portfolio beta:",
+      f"{selected_beta:.4f}")
+
+print("CAPM-predicted portfolio return:",
+      f"{selected_capm_return * 100:.2f}%")
+
+print("Actual annualized expected portfolio return:",
+      f"{selected_return * 100:.2f}%")
+
+print("Jensen's Alpha:",
+      f"{selected_alpha * 100:.2f}%")
+
+if selected_alpha > 0:
+    print("Positive alpha relative to the CAPM estimate.")
+elif selected_alpha < 0:
+    print("Negative alpha relative to the CAPM estimate.")
+else:
+    print("Zero alpha relative to the CAPM estimate.")
