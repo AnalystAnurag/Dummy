@@ -162,6 +162,32 @@ display((best_weights * 100).round(2))
 print("Minimum-risk portfolio weights:")
 display((min_risk_weights * 100).round(2))
 
+# Select weights of the maximum-Sharpe portfolio
+weights = best_weights.values
+
+# Individual stock annualised volatility
+individual_vols = np.sqrt(np.diag(cov_matrix.values))
+
+# Risk without diversification
+no_diversification_risk = np.dot(weights, individual_vols)
+
+# Actual portfolio risk with diversification
+portfolio_volatility = port_risk[port_max_sharpe_index]
+
+# Diversification benefit
+diversification_benefit = (
+    no_diversification_risk - portfolio_volatility
+)
+
+print("Portfolio risk (with diversification):",
+      f"{portfolio_volatility * 100:.2f}%")
+
+print("Portfolio risk (without diversification):",
+      f"{no_diversification_risk * 100:.2f}%")
+
+print("Benefit of diversification:",
+      f"{diversification_benefit * 100:.2f} percentage points")
+
 ==============================================================================
 STEP 9 — NOTEBOOK CODE CELL 16
 ==============================================================================
