@@ -1,0 +1,280 @@
+LAB 1 
+
+** Terminal ** 
+gedit word.txt
+
+**type in the opened file and save**
+Hello world
+Hello Hadoop
+
+1. Execute the word count program in MAP REDUCE 
+
+**Terminal** 
+gedit mapper.py 
+
+**Type inside python file and save** 
+#!/usr/bin/python
+import sys
+
+# reading entire line from standard input 
+for line in sys.stdin:
+    words = line.strip().split()
+    for word in words:
+        print("%s\t%s"%(word,1))
+
+**Terminal**
+Cat words.txt | python mapper.py 
+
+gedit reducer.py
+
+**Inside the file and save**
+#!/usr/bin/env/python
+import sys
+
+count={}
+
+
+for line in sys.stdin:
+    word,count = line.strip().split('\t')
+    counts[word] = counts.get(word,0) + int(count)
+
+for word,count in counts.items():
+    print"%s\t%s"%(word,count)
+
+
+**Terminal**
+cat word.txt | python mapper.py | sort | python reducer.py
+
+**Open cloudera express
+Copy sudo /home/cloudera/cloudera-manager --force 
+Paste in the terminal 
+Copy sudo /home/cloudera/cloudera-manager --force --express 
+
+ Note: Everytime we use Hadoop we need to do this step 
+
+The system will take some time to load then we will get a link.  
+Click on the link - Right click - select open 
+Username and password  
+After opening left hand side there are a lot of framework  
+Start HDFS and YARN**
+
+**Terminal**
+
+hdfs dfs -mkdir prg1
+hdfs dfs -ls
+hdfs dfs -put(space) /home/cloudera/word.txt /user/cloudera/prg1
+hdfs dfs -ls /user/cloudera/prg1
+chmod 777 mapper.py reducer.py
+hadoop jar /usr/lib/hadoop-mapreduce/hadoop-streaming.jar \ 
+    -input /user/cloudera/prg1/word.txt \ 
+    -output /user/cloudera/prg1/output \ 
+    -mapper /home/cloudera/mapper.py \ 
+    -reducer /home/cloudera/reducer.py
+
+hdfs dfs -cat /user/cloudera/prg1/output/part-00000
+hadoop jar /usr/lib/hadoop-mapreduce/hadoop-streaming.jar -input -output -mapper -reducer
+
+
+LAB 2 
+
+**Terminal** 
+gedit titanic.txt
+
+**Type in opened file and save**
+Owen,male,22
+Hannah,female,38
+Laina,female,26
+Lily,female,35
+Allen,male,35
+Jack,male,28
+Emma,female,31
+Thomas,male,42
+Sophia,female,24
+William,male,30
+
+**Terminal**
+gedit mapper2.py
+
+**Type in File and save**
+#!/usr/bin/env python 
+import sys
+import csv
+
+reader=csv.reader(sys.stdin)
+
+for line in reader:
+    #line[1] is gender, line[2] is age 
+    if len(line)>2:
+        print('%s,%s' % (line[1], line[2]))
+
+**Terminal**
+cat titanic.txt | python mapper2.py
+gedit reducer2.py
+
+**Type in File and save**
+#!/usr/bin/env python
+import sys
+
+data = {}
+
+for line in sys.stdin:
+    gender,age = line.strip().split(',')
+
+    if gender not in data:
+        data[gender] = [0,0]
+
+    data[gender][0]+= float(age)
+    data[gender][1]+= 1
+
+for gender,values in data.items():
+    average = values[0] / values[1]
+    print("%s = %s" % (gender, average))
+
+**terminal**
+
+cat titanic.txt | python mapper.py | sort | python reducer2.py
+
+**Launch Cloudera Express and start Hadoop and YARN**
+
+hdfs dfs -mkdir prg2
+
+hdfs dfs -ls
+
+hdfs dfs -put /home/cloudera/titanic.txt /user/cloudera/prg2
+
+hdfs dfs -ls /user/cloudera/prg2
+
+chmod 777 mapper2.py reducer2.py
+
+hadoop jar /usr/lib/hadoop-mapreduce/hadoop-streaming.jar -input /user/cloudera/prg2/titanic.txt -output /user/cloudera/prg2/output -mapper /home/cloudera/mapper2.py -reducer /home/cloudera/reducer2.py
+
+hdfs dfs -cat /user/cloudera/prg2/output/part-00000
+
+hadoop jar /usr/lib/hadoop-mapreduce/hadoop-streaming.jar -input -output -mapper -reducer
+
+**Command to delete a file**
+
+hdfs dfs -rm -r /user/cloudera/prg2/output
+
+
+LAB 3 
+
+**Using pig, find the most occurred start letter in dataset**
+
+**Terminal** 
+gedit word1.txt
+
+**Write in file and save** 
+1, pooja, R, 20,
+2, sam, Thomas, 25
+3, priya, S, 20
+4, pavan, Rao, 20
+
+**Start HUE,HDFS,YARN**
+
+**Terminal**
+pig -x local;
+
+
+A = LOAD 'word1.txt' USING PigStorage(',')
+  AS (id:int, first_name:chararray, last_name:chararray, age:int);
+//-- get first letter of first_name
+B = FOREACH A GENERATE UPPER(SUBSTRING(first_name, 0, 1)) AS first_letter;
+C = GROUP B BY first_letter;
+D = FOREACH C GENERATE group AS first_letter, COUNT(B) AS count;
+E = ORDER D BY count DESC;
+F = LIMIT E 1;
+DUMP F;
+
+quit;
+
+LAB 4 
+
+**Management tasks - adding files, directories, retrieving files and deleting files**
+
+**Start HDFS and YARN**
+
+**Terminal**
+hdfs dfs -mkdir lab4
+hdfs dfs -ls /user/cloudera/lab4  #To list the contents of a directory
+hdfs dfs -put /home/cloudera/titanic.txt /user/cloudera/lab4
+hdfs dfs -ls /user/cloudera/lab4
+hdfs dfs -cat /user/cloudera/lab4/titanic.txt   #To see the contents of the file
+hdfs dfs -rm -r /user/cloudera/lab4  #To remove a directory and files present inside it in hdfs
+
+LAB 5 
+
+**COnvert spark RDD to Data frame and dataset**
+
+**terminal**
+gedit rdd.py
+
+**Type in the opened file and save**
+from pyspark import SparkContext
+from pyspark.sql import SQLContext
+
+# Start spark
+sc = SparkContext()
+sql = SQLContext(sc)
+
+# Create RDD
+rdd = sc.parallelize([
+  (1, "AIML", 69),
+  (2, "CS", 72),
+  (3, "ECE", 99)
+])
+
+# Convert RDD to DataFrame
+df = sql.createDataFrame(rdd, ["No", "Dept", "No_of_students"])
+
+# Show output on screen
+df.show()
+
+sc.stop()
+
+**Terminal**
+spark-submit rdd.py
+
+
+-----------------BASIC COMMANDS--------------------
+
+- mkdir Documents ---> Create directory
+- cd Documents ---> change directory
+- pwd /home/cloudera/Documents ---> Display current directory
+- cd ..  ---> Move to parent directory
+- ls ---> list files and directories 
+- gedit filename.txt ---> Make new files 
+- cat filename.txt ---> display file contents
+- cp file1.txt file.txt ---> copy
+- mv file2.txt data.txt ---> move or rename
+- rm data.txt ---> delete a file 
+- rmdir directoryname ---> remove a folder
+- rm -r directoryname ---> remove a directory and its content
+
+---------------VIEWING AND SERCHING DATA--------------------
+
+- head ---> Display first lines
+- tail ---> Display last lines
+- grep ---> Search for text
+- wc ---> Count lines, words and characters
+- cat ---> Display complete file
+
+-------------SYSTEM AND USER COMMANDS--------------------
+
+- whoami ---> Display current user
+- date ---> Display date and time
+- history ---> Display previously executed commands
+- clear ---> Clear terminal
+
+-------------BASIC HDFS COMMANDS-----------------------
+
+- hdfs dfs -mkdir dirname ---> making a directory
+- hdfs dfs -ls
+- hdfs dfs -put /home/cloudera/linusfile.txt /user/cloudera/dirname ---> transferring a file from Linux to Hadoop
+- hdfs dfs –cat /user/cloudera/dirname/linuxfile.txt ---> view the contents
+- hdfs dfs –get /user/cloudera/dirname/linuxfile.txt /home/cloudera/example ---> Hadoop to Linux
+- hdfs dfs -touchz /user/cloudera/dirname/test.txt ---> create an empty file inside Hadoop
+- hdfs dfs –rm /user/cloudera/dirname/test.txt ---> to remove a file
+- hdfs dfs –rm –r /user/cloudera/dirname ---> to remove a directory 
+- hdfs dfs -expunge ---> clear trash
+- hdfs dfs -count -h /user/cloudera ---> count files & directories
