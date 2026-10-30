@@ -1,3 +1,62 @@
+Packages & Libraries
+--------------------------------------
+!pip install numpy pandas matplotlib seaborn scikit-learn xgboost openpyxl
+# Basic libraries
+import warnings
+warnings.filterwarnings("ignore")
+
+import numpy as np
+import pandas as pd
+
+# Visualization
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Dataset loading
+from sklearn.datasets import load_iris, fetch_20newsgroups
+
+# Train-test split and model selection
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import StratifiedKFold
+
+# Preprocessing
+from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import LabelEncoder
+
+# Pipeline and dimensionality reduction
+from sklearn.pipeline import Pipeline
+from sklearn.decomposition import PCA
+
+# Machine Learning algorithms
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import GaussianNB, MultinomialNB
+from sklearn.ensemble import RandomForestClassifier
+
+# Text classification
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+# Data preprocessing
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import OneHotEncoder
+
+# Model evaluation
+from sklearn.metrics import (
+    accuracy_score,
+    confusion_matrix,
+    classification_report,
+    roc_auc_score
+)
+
+# XGBoost
+from xgboost import XGBClassifier, plot_importance
+
+# Visualization settings
+sns.set_style("whitegrid")
+#-------------------------------------------------------
 Data Preprocessing.
 ---------------------------------------------------------------
 1. INSTALL PACKAGES (run once if needed)
