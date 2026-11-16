@@ -1,0 +1,2088 @@
+# !pip install numpy pandas matplotlib seaborn scikit-learn xgboost openpyxl
+# !pip install yellowbrick shap skimpy deepchecks model-diagnostics
+# !pip install --upgrade deepchecks
+
+#----------------------------------
+
+import warnings
+warnings.filterwarnings("ignore")
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Data exploration
+from skimpy import skim
+
+# Data splitting and tuning
+from sklearn.model_selection import (
+    train_test_split,
+    GridSearchCV,
+    StratifiedKFold,
+    KFold,
+    cross_val_score,
+    learning_curve
+)
+
+# Preprocessing
+from sklearn.preprocessing import (
+    StandardScaler,
+    MinMaxScaler,
+    Normalizer,
+    OneHotEncoder,
+    OrdinalEncoder,
+    LabelEncoder
+)
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.decomposition import PCA
+
+# Regression models
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.tree import (
+    DecisionTreeRegressor,
+    DecisionTreeClassifier,
+    plot_tree
+)
+from sklearn.svm import SVR, SVC
+from sklearn.neighbors import KNeighborsRegressor, KNeighborsClassifier
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.naive_bayes import GaussianNB, MultinomialNB
+from sklearn.cluster import KMeans
+
+# XGBoost
+from xgboost import XGBRegressor, XGBClassifier, plot_importance
+
+# Text processing
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.datasets import load_iris, fetch_20newsgroups
+
+# Evaluation
+from sklearn.metrics import (
+    r2_score,
+    mean_absolute_error,
+    mean_squared_error,
+    mean_absolute_percentage_error,
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    confusion_matrix,
+    classification_report,
+    roc_auc_score,
+    roc_curve,
+    precision_recall_curve,
+    silhouette_score
+)
+
+# Yellowbrick diagnostics
+from yellowbrick.model_selection import LearningCurve
+from yellowbrick.regressor import ResidualsPlot, PredictionError
+from yellowbrick.classifier import (
+    ClassificationReport,
+    ConfusionMatrix,
+    ROCAUC,
+    PrecisionRecallCurve
+)
+
+# Explainability
+import shap
+
+# Deepchecks imports can be commented out if the package is not installed
+# or if the installed version has a compatibility issue.
+from deepchecks.tabular import Dataset as DeepchecksDataset
+from deepchecks.tabular.suites import data_integrity
+
+sns.set_style("whitegrid")
+
+#---------------------------------------------
+ LOAD DATA
+---------------------------------------------------------------
+# For CSV
+df = pd.read_csv("your_file.csv")
+
+# OR for Excel (use this instead of the CSV line)
+# df = pd.read_excel("your_file.xlsx")
+
+# Preview the data
+print(df.head())
+print(df.shape)
+
+---------------------------------------------------------------
+4. BASIC DATA CHECKS
+---------------------------------------------------------------
+# Column names, data types, and non-null counts
+df.info()
+
+# Summary statistics for numeric columns
+print(df.describe())
+
+# Summary for all columns, including categorical
+print(df.describe(include="all"))
+
+# Missing values in each column
+print(df.isnull().sum())
+
+# Percentage of missing values
+print((df.isnull().mean() * 100).round(2))
+
+# Number of duplicate rows
+print(df.duplicated().sum())
+
+# Unique values in each column
+print(df.nunique())
+
+---------------------------------------------------------------
+5. SIMPLE DATA CLEANING
+---------------------------------------------------------------
+# Remove extra spaces from column names
+df.columns = df.columns.str.strip()
+
+# Replace cells containing only spaces with NaN
+df = df.replace(r"^\\s*$", np.nan, regex=True)
+
+# Remove duplicate rows
+df = df.drop_duplicates()
+
+# Optional: remove columns that are clearly irrelevant, such as a row ID
+# df = df.drop(columns=["ID"])
+
+# Check again after cleaning
+print(df.shape)
+print(df.isnull().sum())
+
+---------------------------------------------------------------
+6. CHECK AND FIX DATA TYPES (ONLY IF REQUIRED)
+---------------------------------------------------------------
+# Convert a column to numeric; unconvertible values become NaN
+# df["Age"] = pd.to_numeric(df["Age"], errors="coerce")
+
+# Convert a column to datetime
+# df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+
+# Check data types
+print(df.dtypes)
+
+---------------------------------------------------------------
+7. BASIC EDA
+---------------------------------------------------------------
+# Histograms for numeric columns
+df.select_dtypes(include=np.number).hist(figsize=(12, 8))
+plt.tight_layout()
+plt.show()
+
+# Correlation heatmap for numeric columns
+numeric_df = df.select_dtypes(include=np.number)
+sns.heatmap(numeric_df.corr(), annot=True, cmap="coolwarm", fmt=".2f")
+plt.show()
+
+# Count plot for a categorical column (replace "Category")
+# sns.countplot(data=df, x="Category")
+# plt.xticks(rotation=45)
+# plt.show()
+
+# Target class distribution (replace TARGET)
+# print(df["TARGET"].value_counts(dropna=False))
+# sns.countplot(data=df, x="TARGET")
+# plt.xticks(rotation=45)
+# plt.show()
+
+---------------------------------------------------------------
+8. DEFINE FEATURES (X) AND TARGET (y)
+---------------------------------------------------------------
+TARGET = "target_column"  # CHANGE this to your actual target column
+
+# If target labels are missing, those rows cannot be used for supervised training
+df = df.dropna(subset=[TARGET])
+
+X = df.drop(columns=[TARGET])
+y = df[TARGET]
+
+# Optional: remove ID columns from X if they do not carry useful predictive information
+# X = X.drop(columns=["ID"])
+
+---------------------------------------------------------------
+9. TRAIN-TEST SPLIT (DO THIS BEFORE MODEL PREPROCESSING)
+---------------------------------------------------------------
+from sklearn.model_selection import train_test_split
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y,
+    test_size=0.20,
+    random_state=42,
+    stratify=y
+)
+
+# For regression, remove stratify=y:
+# X_train, X_test, y_train, y_test = train_test_split(
+#     X, y, test_size=0.20, random_state=42
+# )
+
+---------------------------------------------------------------
+10. IMPUTE MISSING VALUES, ENCODE CATEGORIES, AND SCALE NUMBERS
+---------------------------------------------------------------
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+
+# Detect numeric and categorical feature columns
+numeric_features = X_train.select_dtypes(include=np.number).columns
+categorical_features = X_train.select_dtypes(exclude=np.number).columns
+
+# Numeric: replace missing values with median, then scale
+numeric_transformer = Pipeline(steps=[
+    ("imputer", SimpleImputer(strategy="median")),
+    ("scaler", StandardScaler())
+])
+
+# Categorical: replace missing values with most frequent value, then one-hot encode
+categorical_transformer = Pipeline(steps=[
+    ("imputer", SimpleImputer(strategy="most_frequent")),
+    ("encoder", OneHotEncoder(handle_unknown="ignore"))
+])
+
+# Apply the appropriate steps to each column type
+preprocessor = ColumnTransformer(transformers=[
+    ("num", numeric_transformer, numeric_features),
+    ("cat", categorical_transformer, categorical_features)
+])
+
+# Fit only on training data; transform both sets
+X_train_processed = preprocessor.fit_transform(X_train)
+X_test_processed = preprocessor.transform(X_test)
+
+print("Training data shape:", X_train_processed.shape)
+print("Testing data shape:", X_test_processed.shape)
+
+NOTE:
+-----
+For machine-learning models, it is usually best to place "preprocessor" directly
+inside the model Pipeline. This ensures the same transformations are applied
+consistently and helps prevent data leakage.
+
+Example:
+from sklearn.linear_model import LogisticRegression
+
+model = Pipeline(steps=[
+    ("preprocessor", preprocessor),
+    ("classifier", LogisticRegression(max_iter=1000))
+])
+
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+
+Do not fit the preprocessor separately first and then fit this same pipeline.
+Choose either the standalone transformed-data approach above OR the full model
+Pipeline approach.
+
+---------------------------------------------------------------
+11. MISSING-VALUE IMPUTATION: SIMPLE PANDAS ALTERNATIVE
+---------------------------------------------------------------
+Use this for quick data cleaning/EDA when you are not yet evaluating a model.
+For machine learning, prefer SimpleImputer inside the Pipeline in Section 10.
+
+# Numeric columns: fill missing values with each column's median
+numeric_cols = df.select_dtypes(include=np.number).columns
+df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].median())
+
+# Categorical/text columns: fill missing values with the most frequent value
+categorical_cols = df.select_dtypes(exclude=np.number).columns
+for col in categorical_cols:
+    if df[col].isnull().any() and not df[col].mode().empty:
+        df[col] = df[col].fillna(df[col].mode()[0])
+
+# Check remaining missing values
+print(df.isnull().sum())
+
+CAUTION: Do not run this whole-data imputation before train/test splitting for a
+final model evaluation. It calculates medians/modes using the whole dataset,
+including the test set.
+
+---------------------------------------------------------------
+12. OUTLIER DETECTION USING THE IQR METHOD
+---------------------------------------------------------------
+# Choose one numeric column to inspect (replace "Age")
+col = "Age"
+
+Q1 = df[col].quantile(0.25)
+Q3 = df[col].quantile(0.75)
+IQR = Q3 - Q1
+
+lower_bound = Q1 - 1.5 * IQR
+upper_bound = Q3 + 1.5 * IQR
+
+outliers = df[(df[col] < lower_bound) | (df[col] > upper_bound)]
+print("Number of outliers:", len(outliers))
+print(outliers[[col]].head())
+
+# Visual check with a boxplot
+sns.boxplot(x=df[col])
+plt.show()
+
+---------------------------------------------------------------
+13. OUTLIER TREATMENT: CAPPING (OPTIONAL)
+---------------------------------------------------------------
+Capping limits extreme values to the IQR boundaries. Use only when the values
+are not valid observations you need to preserve.
+
+# Example for quick EDA / data cleaning (replace "Age")
+df["Age"] = df["Age"].clip(lower_bound, upper_bound)
+
+# For machine learning, calculate bounds from TRAINING DATA ONLY.
+# Example for a single numeric column:
+col = "Age"
+Q1_train = X_train[col].quantile(0.25)
+Q3_train = X_train[col].quantile(0.75)
+IQR_train = Q3_train - Q1_train
+lower_train = Q1_train - 1.5 * IQR_train
+upper_train = Q3_train + 1.5 * IQR_train
+
+X_train[col] = X_train[col].clip(lower_train, upper_train)
+X_test[col] = X_test[col].clip(lower_train, upper_train)
+
+# Important: do not run the example above unless "Age" is a numeric feature
+# present in BOTH X_train and X_test. Repeat for other selected columns as needed.
+
+OTHER OPTIONS:
+- Correct an outlier if it is a data-entry error and you know the true value.
+- Remove a row only when it is erroneous or outside the scope of the analysis.
+- Keep genuine extreme values when they are meaningful.
+- Do not automatically cap every numeric column; use domain knowledge and plots.
+
+---------------------------------------------------------------
+14. QUICK CHECK BEFORE MODELLING
+---------------------------------------------------------------
+print("Rows and columns:", df.shape)
+print("Duplicate rows:", df.duplicated().sum())
+print("Missing values by column:")
+print(df.isnull().sum())
+print("Data types:")
+print(df.dtypes)
+
+############################
+## Linear Regression: 
+
+### Training the model
+model = Pipeline([
+    ("preprocessor", preprocessor),
+    ("model", LinearRegression())
+])
+
+model.fit(X_train, y_train)
+
+### Model Output Summary
+print(model)
+
+### Predicting the model
+
+y_pred = model.predict(X_test)
+
+pd.DataFrame({
+    "Actual": y_test,
+    "Predicted": y_pred
+}).head(10)
+
+### Model Evaluation
+
+r2 = r2_score(y_test, y_pred)
+mae = mean_absolute_error(y_test, y_pred)
+mse = mean_squared_error(y_test, y_pred)
+rmse = np.sqrt(mse)
+
+print("R²   :", round(r2, 4))
+print("MAE  :", round(mae, 4))
+print("MSE  :", round(mse, 4))
+print("RMSE :", round(rmse, 4))
+
+
+# -----------------------------------------------------------------------------
+# 2.4 LINEAR REGRESSION - YELLOWBRICK DIAGNOSTICS
+# -----------------------------------------------------------------------------
+
+visualizer = ResidualsPlot(linear_regression_model)
+visualizer.fit(X_train, y_train)
+visualizer.score(X_test, y_test)
+visualizer.show()
+
+visualizer = PredictionError(linear_regression_model)
+visualizer.fit(X_train, y_train)
+visualizer.score(X_test, y_test)
+visualizer.show()
+
+
+# -----------------------------------------------------------------------------
+# 2.5 LINEAR REGRESSION - SHAP
+# -----------------------------------------------------------------------------
+import shap
+from model_diagnostics.calibration import plot_reliability_diagram
+
+explainer = shap.Explainer(model.predict, X_train)
+
+shap_values = explainer(X_test)
+
+shap.plots.beeswarm(shap_values)
+
+# Interpretation:
+# SHAP values show how each feature moves a prediction above or below the
+# model's baseline. In the summary plot, features are ordered by overall
+# contribution; color represents feature value. SHAP explains model behavior,
+# not causal effects.
+
+
+# -----------------------------------------------------------------------------
+# 2.6 LINEAR REGRESSION - LEARNING CURVE
+# -----------------------------------------------------------------------------
+
+visualizer = LearningCurve(
+    linear_regression_model,
+    scoring='r2',
+    n_jobs=-1
+)
+
+visualizer.fit(X_train, y_train)
+visualizer.show()
+
+# Interpretation:
+# High, converging train/validation scores suggest a good fit.
+# A high train score and much lower validation score suggest overfitting.
+# Low scores on both suggest underfitting. A rising validation curve suggests
+# that more training observations may help.
+
+######################
+### Decision Tree Regressor 
+
+
+# 1. Model Fitting and Evaluation
+
+dt_regression_search.fit(X_train, y_train)
+
+dt_regression_model = dt_regression_search.best_estimator_
+dt_regression_pred = dt_regression_model.predict(X_test)
+
+print("Best Parameters:", dt_regression_search.best_params_)
+print("CV R2:", dt_regression_search.best_score_)
+print("Test R2:", r2_score(y_test, dt_regression_pred))
+print("Test MAE:", mean_absolute_error(y_test, dt_regression_pred))
+print("Test RMSE:", np.sqrt(mean_squared_error(y_test, dt_regression_pred)))
+
+
+# 2. Feature Importance
+
+dt_regression_importance = pd.DataFrame({
+    "Feature": dt_regression_model.named_steps["preprocessor"].get_feature_names_out(),
+    "Importance": dt_regression_model.named_steps["model"].feature_importances_
+}).sort_values("Importance", ascending=False)
+
+display(dt_regression_importance.head(15))
+
+sns.barplot(data=dt_regression_importance.head(15),
+            x="Importance", y="Feature")
+plt.title("Decision Tree - Feature Importance")
+plt.tight_layout()
+plt.show()
+
+
+# 3. Decision Tree Visualization
+
+plot_tree(
+    dt_regression_model.named_steps["model"],
+    feature_names=dt_regression_model.named_steps["preprocessor"].get_feature_names_out(),
+    filled=True, rounded=True, max_depth=3, fontsize=8
+)
+plt.show()
+
+
+# 4. SHAP Analysis
+
+dt_reg_explainer = shap.TreeExplainer(dt_regression_model.named_steps["model"])
+
+dt_reg_shap_values = dt_reg_explainer(
+    dt_regression_model.named_steps["preprocessor"].transform(X_test)
+)
+
+shap.summary_plot(
+    dt_reg_shap_values,
+    feature_names=dt_regression_model.named_steps["preprocessor"].get_feature_names_out()
+)
+
+
+# 5. Learning Curve
+
+visualizer = LearningCurve(
+    dt_regression_model,
+    cv=regression_cv,
+    scoring="r2",
+    n_jobs=-1
+)
+
+visualizer.fit(X_train, y_train)
+visualizer.show()
+
+
+###############################
+### Support Vector Regressor
+
+
+# 1. Pipeline and Hyperparameter Tuning
+
+svr_pipeline = Pipeline([
+    ("preprocessor", preprocessor),
+    ("model", SVR())
+])
+
+svr_grid = {
+    "model__kernel": ["linear", "rbf"],
+    "model__C": [0.1, 1, 10, 100],
+    "model__epsilon": [0.01, 0.1, 0.2],
+    "model__gamma": ["scale", "auto"]
+}
+
+svr_search = GridSearchCV(
+    svr_pipeline, svr_grid,
+    cv=5, scoring="r2", n_jobs=-1
+)
+
+svr_search.fit(X_train, y_train)
+
+svr_model = svr_search.best_estimator_
+svr_pred = svr_model.predict(X_test)
+
+
+# 2. Model Evaluation
+
+print("Best Parameters:", svr_search.best_params_)
+print("CV R2:", svr_search.best_score_)
+print("Test R2:", r2_score(y_test, svr_pred))
+print("Test MAE:", mean_absolute_error(y_test, svr_pred))
+print("Test RMSE:", np.sqrt(mean_squared_error(y_test, svr_pred)))
+
+
+# 3. Prediction Error Plot
+
+visualizer = PredictionError(svr_model)
+visualizer.fit(X_train, y_train)
+visualizer.score(X_test, y_test)
+visualizer.show()
+
+
+# 4. Residual Plot
+
+visualizer = ResidualsPlot(svr_model)
+visualizer.fit(X_train, y_train)
+visualizer.score(X_test, y_test)
+visualizer.show()
+
+
+# 5. Learning Curve
+
+visualizer = LearningCurve(
+    svr_model, cv=regression_cv,
+    scoring="r2", n_jobs=-1
+)
+visualizer.fit(X_train, y_train)
+visualizer.show()
+
+
+##########################
+### KNN Regression
+
+knn_regression_pipeline = Pipeline(steps=[
+    ("preprocessor", preprocessor),
+    ("model", KNeighborsRegressor())
+])
+
+knn_regression_grid = {
+    "model__n_neighbors": [3, 5, 7, 9, 11, 15],
+    "model__weights": ["uniform", "distance"],
+    "model__p": [1, 2]
+}
+
+knn_regression_search = GridSearchCV(
+    knn_regression_pipeline,
+    knn_regression_grid,
+    cv=5,
+    scoring="r2",
+    n_jobs=-1
+)
+knn_regression_search.fit(X_train, y_train)
+
+knn_regression_model = knn_regression_search.best_estimator_
+knn_regression_pred = knn_regression_model.predict(X_test)
+
+print("Best parameters:", knn_regression_search.best_params_)
+print("Test R2:", r2_score(y_test, knn_regression_pred))
+print("Test MAE:", mean_absolute_error(y_test, knn_regression_pred))
+print("Test RMSE:", np.sqrt(mean_squared_error(y_test, knn_regression_pred)))
+
+visualizer = PredictionError(knn_regression_model)
+visualizer.fit(X_train, y_train)
+visualizer.score(X_test, y_test)
+visualizer.show()
+
+visualizer = LearningCurve(
+    knn_regression_model,
+    scoring="r2",
+    cv=regression_cv,
+    n_jobs=-1
+)
+visualizer.fit(X_train, y_train)
+visualizer.show()
+
+# Interpretation:
+# KNN predicts using nearby observations. Small k is more flexible and
+# sensitive to noise; large k smooths predictions and may underfit.
+# Distance-based models are sensitive to feature scaling.
+
+#####################################
+### Random Forest Regression
+
+    ("preprocessor", preprocessor),
+    ("model", RandomForestRegressor(
+        random_state=RANDOM_STATE,
+        n_jobs=-1
+    ))
+])
+
+rf_regression_grid = {
+    "model__n_estimators": [100, 200],
+    "model__max_depth": [None, 5, 10, 20],
+    "model__min_samples_split": [2, 5],
+    "model__min_samples_leaf": [1, 2]
+}
+
+rf_regression_search = GridSearchCV(
+    rf_regression_pipeline,
+    rf_regression_grid,
+    cv=5,
+    scoring="r2",
+    n_jobs=-1
+)
+rf_regression_search.fit(X_train, y_train)
+
+rf_regression_model = rf_regression_search.best_estimator_
+rf_regression_pred = rf_regression_model.predict(X_test)
+
+print("Best parameters:", rf_regression_search.best_params_)
+print("Test R2:", r2_score(y_test, rf_regression_pred))
+print("Test MAE:", mean_absolute_error(y_test, rf_regression_pred))
+print("Test RMSE:", np.sqrt(mean_squared_error(y_test, rf_regression_pred)))
+
+rf_regression_feature_names = (
+    rf_regression_model.named_steps["preprocessor"].get_feature_names_out()
+)
+rf_regression_importance = pd.DataFrame({
+    "Feature": rf_regression_feature_names,
+    "Importance": rf_regression_model.named_steps["model"].feature_importances_
+}).sort_values("Importance", ascending=False)
+
+display(rf_regression_importance.head(15))
+
+plt.figure(figsize=(9, 6))
+sns.barplot(
+    data=rf_regression_importance.head(15),
+    x="Importance",
+    y="Feature"
+)
+plt.title("Random Forest Regressor - Feature Importance")
+plt.tight_layout()
+plt.show()
+
+X_test_rf_reg_transformed = (
+    rf_regression_model.named_steps["preprocessor"].transform(X_test)
+)
+rf_reg_explainer = shap.TreeExplainer(
+    rf_regression_model.named_steps["model"]
+)
+rf_reg_shap_values = rf_reg_explainer.shap_values(X_test_rf_reg_transformed)
+shap.summary_plot(
+    rf_reg_shap_values,
+    X_test_rf_reg_transformed,
+    feature_names=rf_regression_feature_names
+)
+
+visualizer = LearningCurve(
+    rf_regression_model,
+    scoring="r2",
+    cv=regression_cv,
+    n_jobs=-1
+)
+visualizer.fit(X_train, y_train)
+visualizer.show()
+
+# Interpretation:
+# Random Forest averages many decision trees, generally reducing the variance
+# of a single tree. More trees can stabilize predictions but increase runtime.
+# Feature importance is relative within this fitted model, not causal evidence.
+
+#####################################
+### XGBoost Regression 
+
+xgb_regression_pipeline = Pipeline(steps=[
+    ("preprocessor", preprocessor),
+    ("model", XGBRegressor(
+        objective="reg:squarederror",
+        random_state=RANDOM_STATE,
+        n_jobs=-1
+    ))
+])
+
+xgb_regression_grid = {
+    "model__n_estimators": [100, 200],
+    "model__max_depth": [3, 5, 7],
+    "model__learning_rate": [0.03, 0.1],
+    "model__subsample": [0.8, 1.0],
+    "model__colsample_bytree": [0.8, 1.0]
+}
+
+xgb_regression_search = GridSearchCV(
+    xgb_regression_pipeline,
+    xgb_regression_grid,
+    cv=5,
+    scoring="r2",
+    n_jobs=-1
+)
+xgb_regression_search.fit(X_train, y_train)
+
+xgb_regression_model = xgb_regression_search.best_estimator_
+xgb_regression_pred = xgb_regression_model.predict(X_test)
+
+print("Best parameters:", xgb_regression_search.best_params_)
+print("Test R2:", r2_score(y_test, xgb_regression_pred))
+print("Test MAE:", mean_absolute_error(y_test, xgb_regression_pred))
+print("Test RMSE:", np.sqrt(mean_squared_error(y_test, xgb_regression_pred)))
+
+xgb_regression_feature_names = (
+    xgb_regression_model.named_steps["preprocessor"].get_feature_names_out()
+)
+plot_importance(
+    xgb_regression_model.named_steps["model"],
+    importance_type="gain",
+    max_num_features=15
+)
+plt.title("XGBoost Regressor - Feature Importance (Gain)")
+plt.tight_layout()
+plt.show()
+
+X_test_xgb_reg_transformed = (
+    xgb_regression_model.named_steps["preprocessor"].transform(X_test)
+)
+xgb_reg_explainer = shap.TreeExplainer(
+    xgb_regression_model.named_steps["model"]
+)
+xgb_reg_shap_values = xgb_reg_explainer.shap_values(
+    X_test_xgb_reg_transformed
+)
+shap.summary_plot(
+    xgb_reg_shap_values,
+    X_test_xgb_reg_transformed,
+    feature_names=xgb_regression_feature_names
+)
+
+visualizer = LearningCurve(
+    xgb_regression_model,
+    scoring="r2",
+    cv=regression_cv,
+    n_jobs=-1
+)
+visualizer.fit(X_train, y_train)
+visualizer.show()
+
+# Interpretation:
+# XGBoost builds trees sequentially, with each new tree improving the current
+# ensemble. Learning rate controls each tree's contribution; depth controls
+# complexity; subsample and colsample_bytree introduce sampling.
+# Gain-based importance reflects improvement in the model's objective.
+
+
+#####################################
+### Classification Techniques
+#### Logistic Regression 
+
+
+# 3.1 Classification CV
+
+classification_cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+
+
+# 3.2 Logistic Regression - Hyperparameter Tuning
+
+logistic_pipeline = Pipeline([
+    ("preprocessor", preprocessor),
+    ("model", LogisticRegression(max_iter=2000, random_state=RANDOM_STATE))
+])
+
+logistic_grid = {
+    "model__C": [0.01, 0.1, 1, 10, 100],
+    "model__solver": ["lbfgs"],
+    "model__class_weight": [None, "balanced"]
+}
+
+logistic_search = GridSearchCV(
+    logistic_pipeline, logistic_grid,
+    cv=classification_cv, scoring="f1_weighted", n_jobs=-1
+).fit(X_train, y_train)
+
+logistic_model = logistic_search.best_estimator_
+logistic_pred = logistic_model.predict(X_test)
+
+
+# 3.3 Model Evaluation
+
+print("Best Parameters:", logistic_search.best_params_)
+print("CV Weighted F1:", logistic_search.best_score_)
+print(classification_report(y_test, logistic_pred, zero_division=0))
+
+print("Accuracy:", accuracy_score(y_test, logistic_pred))
+print("Precision:", precision_score(y_test, logistic_pred, average="weighted", zero_division=0))
+print("Recall:", recall_score(y_test, logistic_pred, average="weighted", zero_division=0))
+print("F1:", f1_score(y_test, logistic_pred, average="weighted", zero_division=0))
+
+
+# 3.4 Confusion Matrix
+
+sns.heatmap(confusion_matrix(y_test, logistic_pred), annot=True, fmt="d", cmap="Blues")
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+plt.title("Logistic Regression - Confusion Matrix")
+plt.show()
+
+
+# 3.5 Yellowbrick Diagnostics
+
+for plot in [ClassificationReport, ConfusionMatrix]:
+    visualizer = plot(logistic_model)
+    visualizer.fit(X_train, y_train)
+    visualizer.score(X_test, y_test)
+    visualizer.show()
+
+
+# 3.6 ROC-AUC and Precision-Recall
+
+if y.nunique() == 2:
+    for plot in [ROCAUC, PrecisionRecallCurve]:
+        visualizer = plot(logistic_model)
+        visualizer.fit(X_train, y_train)
+        visualizer.score(X_test, y_test)
+        visualizer.show()
+
+    print("ROC-AUC:", roc_auc_score(
+        y_test, logistic_model.predict_proba(X_test)[:, 1]
+    ))
+
+
+# 3.7 SHAP Analysis
+
+explainer = shap.LinearExplainer(
+    logistic_model.named_steps["model"],
+    logistic_model.named_steps["preprocessor"].transform(X_train)
+)
+
+shap_values = explainer(
+    logistic_model.named_steps["preprocessor"].transform(X_test)
+)
+
+shap.summary_plot(
+    shap_values,
+    feature_names=logistic_model.named_steps["preprocessor"].get_feature_names_out()
+)
+
+
+# 3.8 Learning Curve
+
+visualizer = LearningCurve(
+    logistic_model, cv=classification_cv,
+    scoring="f1_weighted", n_jobs=-1
+)
+visualizer.fit(X_train, y_train)
+visualizer.show()
+
+######################################
+#### Decission Tree Classification
+
+
+# -----------------------------------------------------------------------------
+# 1. DECISION TREE CLASSIFICATION - HYPERPARAMETER TUNING
+# -----------------------------------------------------------------------------
+
+dt_classification_pipeline = Pipeline([
+    ("preprocessor", preprocessor),
+    ("model", DecisionTreeClassifier(random_state=RANDOM_STATE))
+])
+
+dt_classification_grid = {
+    "model__max_depth": [3, 5, 8, None],
+    "model__min_samples_split": [2, 5, 10],
+    "model__min_samples_leaf": [1, 2, 5],
+    "model__criterion": ["gini", "entropy"]
+}
+
+dt_classification_search = GridSearchCV(
+    dt_classification_pipeline, dt_classification_grid,
+    cv=classification_cv, scoring="f1_weighted", n_jobs=-1
+).fit(X_train, y_train)
+
+dt_classification_model = dt_classification_search.best_estimator_
+dt_classification_pred = dt_classification_model.predict(X_test)
+
+
+# -----------------------------------------------------------------------------
+# 2. MODEL EVALUATION
+# -----------------------------------------------------------------------------
+
+print("Best Parameters:", dt_classification_search.best_params_)
+print("Best CV F1:", dt_classification_search.best_score_)
+print("Accuracy:", accuracy_score(y_test, dt_classification_pred))
+print(classification_report(y_test, dt_classification_pred, zero_division=0))
+
+
+# -----------------------------------------------------------------------------
+# 3. CONFUSION MATRIX
+# -----------------------------------------------------------------------------
+
+visualizer = ConfusionMatrix(dt_classification_model)
+visualizer.fit(X_train, y_train)
+visualizer.score(X_test, y_test)
+visualizer.show()
+
+
+# -----------------------------------------------------------------------------
+# 4. FEATURE IMPORTANCE
+# -----------------------------------------------------------------------------
+
+dt_classification_importance = pd.DataFrame({
+    "Feature": dt_classification_model.named_steps["preprocessor"].get_feature_names_out(),
+    "Importance": dt_classification_model.named_steps["model"].feature_importances_
+}).sort_values("Importance", ascending=False)
+
+display(dt_classification_importance.head(15))
+
+sns.barplot(data=dt_classification_importance.head(15),
+            x="Importance", y="Feature")
+plt.title("Decision Tree - Feature Importance")
+plt.tight_layout()
+plt.show()
+
+
+# -----------------------------------------------------------------------------
+# 5. SHAP ANALYSIS
+# -----------------------------------------------------------------------------
+
+dt_clf_preprocessor = dt_classification_model.named_steps["preprocessor"]
+
+dt_clf_explainer = shap.TreeExplainer(
+    dt_classification_model.named_steps["model"]
+)
+
+dt_clf_shap_values = dt_clf_explainer(
+    dt_clf_preprocessor.transform(X_test)
+)
+
+shap.summary_plot(
+    dt_clf_shap_values,
+    dt_clf_preprocessor.transform(X_test),
+    feature_names=dt_clf_preprocessor.get_feature_names_out()
+)
+
+
+# -----------------------------------------------------------------------------
+# 6. LEARNING CURVE
+# -----------------------------------------------------------------------------
+
+visualizer = LearningCurve(
+    dt_classification_model,
+    cv=classification_cv,
+    scoring="f1_weighted",
+    n_jobs=-1
+)
+
+visualizer.fit(X_train, y_train)
+visualizer.show()
+
+###########################################
+### Support Vector Machine Classification
+
+
+# -----------------------------------------------------------------------------
+# 3.4 SUPPORT VECTOR CLASSIFIER (SVC)
+# -----------------------------------------------------------------------------
+
+# 1. Hyperparameter Tuning
+
+svc_pipeline = Pipeline([
+    ("preprocessor", preprocessor),
+    ("model", SVC(probability=True, random_state=RANDOM_STATE))
+])
+
+svc_grid = {
+    "model__kernel": ["linear", "rbf"],
+    "model__C": [0.1, 1, 10, 100],
+    "model__gamma": ["scale", "auto"]
+}
+
+svc_search = GridSearchCV(
+    svc_pipeline, svc_grid,
+    cv=classification_cv, scoring="f1_weighted", n_jobs=-1
+).fit(X_train, y_train)
+
+svc_model = svc_search.best_estimator_
+svc_pred = svc_model.predict(X_test)
+
+
+# 2. Model Evaluation
+
+print("Best Parameters:", svc_search.best_params_)
+print("Best CV F1:", svc_search.best_score_)
+print("Accuracy:", accuracy_score(y_test, svc_pred))
+print(classification_report(y_test, svc_pred, zero_division=0))
+
+
+# 3. Classification Diagnostics
+
+for plot in [ClassificationReport, ConfusionMatrix]:
+    visualizer = plot(svc_model)
+    visualizer.fit(X_train, y_train)
+    visualizer.score(X_test, y_test)
+    visualizer.show()
+
+
+# 4. ROC-AUC (Binary Classification)
+
+if len(np.unique(y_train)) == 2:
+    visualizer = ROCAUC(svc_model)
+    visualizer.fit(X_train, y_train)
+    visualizer.score(X_test, y_test)
+    visualizer.show()
+
+
+# 5. Learning Curve
+
+visualizer = LearningCurve(
+    svc_model, cv=classification_cv,
+    scoring="f1_weighted", n_jobs=-1
+)
+visualizer.fit(X_train, y_train)
+visualizer.show()
+########################################
+### KMeans Classifier
+#### K-Means Clustering(No Train Test split as Unsupervised)
+
+### Data Import
+
+df = pd.read_csv("your_dataset.csv")
+
+### Data Exploration
+
+df.head()
+df.tail()
+df.shape
+df.info()
+df.describe()
+df.isnull().sum()
+df.duplicated().sum()
+skim(df)
+df.nunique()
+
+### correlation plot
+sns.heatmap(
+    df.select_dtypes(include=np.number).corr(),
+    annot=True,
+    cmap="coolwarm"
+)
+
+plt.show()
+
+### Deepchecks data validation
+
+ds = Dataset(
+    df,
+    cat_features=df.select_dtypes(
+        exclude=np.number
+    ).columns.tolist()
+)
+
+result = data_integrity().run(ds)
+
+result.show()
+
+### X = df.copy()
+
+X = X.drop(columns=["Customer_ID"], errors="ignore") ## incase any identifiers
+
+### Preprocessing
+
+numeric_cols = X.select_dtypes(include=np.number).columns.tolist()
+categorical_cols = X.select_dtypes(exclude=np.number).columns.tolist()
+
+numeric_pipeline = Pipeline([
+    ("imputer", SimpleImputer(strategy="median")),
+    ("scaler", StandardScaler())
+])
+
+categorical_pipeline = Pipeline([
+    ("imputer", SimpleImputer(strategy="most_frequent")),
+    ("encoder", OneHotEncoder(
+        handle_unknown="ignore",
+        sparse_output=False
+    ))
+])
+
+preprocessor = ColumnTransformer([
+    ("num", numeric_pipeline, numeric_cols),
+    ("cat", categorical_pipeline, categorical_cols)
+])
+
+### transforming
+X_processed = preprocessor.fit_transform(X)
+
+### Training model
+
+inertia = []
+
+for k in range(2, 11):
+    kmeans = KMeans(
+        n_clusters=k,
+        random_state=42,
+        n_init=10
+    )
+    
+    kmeans.fit(X_processed)
+    inertia.append(kmeans.inertia_)
+
+### Elbow Method
+plt.plot(range(2, 11), inertia, marker="o")
+plt.xlabel("Number of Clusters")
+plt.ylabel("Inertia")
+plt.title("Elbow Method")
+plt.show()
+
+### put the value of k from elbow method
+kmeans = KMeans(
+    n_clusters=K,
+    random_state=42,
+    n_init=10
+)
+
+clusters = kmeans.fit_predict(X_processed)
+
+### cluster output
+df["Cluster"] = clusters
+
+df["Cluster"].value_counts().sort_index()
+
+### cluster sizes
+
+sns.countplot(x=df["Cluster"])
+
+plt.title("Cluster Distribution")
+plt.show()
+
+### clustering evaluation
+silhouette = silhouette_score(
+    X_processed,
+    clusters
+)
+
+print("Silhouette Score:", round(silhouette, 4))
+
+### Cluster Profiling
+
+cluster_profile = df.groupby("Cluster").mean(
+    numeric_only=True
+)
+
+cluster_profile
+
+####visually plotting
+
+cluster_profile.T.plot(
+    kind="bar",
+    figsize=(12, 6)
+)
+
+plt.title("Cluster Profile")
+plt.ylabel("Average Value")
+plt.show()
+
+# --- Additional Visualization for K-Means ---
+
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Reduce data to 2 dimensions
+pca = PCA(n_components=2)
+
+X_pca = pca.fit_transform(X_processed)
+
+# Get cluster predictions
+kmeans_pred = kmeans.predict(X_processed)
+
+# Plot clusters
+plt.figure(figsize=(8, 6))
+
+sns.scatterplot(
+    x=X_pca[:, 0],
+    y=X_pca[:, 1],
+    hue=kmeans_pred,
+    palette="tab10",
+    s=60
+)
+
+# Transform cluster centroids into PCA space
+centroids_pca = pca.transform(
+    kmeans.cluster_centers_
+)
+
+plt.scatter(
+    centroids_pca[:, 0],
+    centroids_pca[:, 1],
+    c="black",
+    marker="X",
+    s=200,
+    label="Centroids"
+)
+
+plt.title("K-Means Clustering (PCA Projection)", fontsize=14)
+plt.xlabel("Principal Component 1")
+plt.ylabel("Principal Component 2")
+plt.legend()
+plt.show()
+
+
+# Cluster counts
+print("Cluster counts:")
+
+print(
+    pd.Series(kmeans_pred).value_counts().sort_index()
+)
+
+
+####################################
+### KNN Classification
+
+==============================================================
+In [2]:
+==============================================================
+## Using iris data for modelling 
+
+data = load_iris() 
+X,y = data.data , data.target
+labels = data.target_names
+
+
+==============================================================
+In [3]:
+==============================================================
+## Pipeline consisting of StandardScaler, PCA and KKNeighborsClassifier 
+
+pipeline = Pipeline([
+    ('scaler', StandardScaler()),
+    ('pca',PCA(n_components= 2)),
+    ("knn",KNeighborsClassifier(n_neighbors=5,))
+])
+
+
+==============================================================
+In [4]:
+==============================================================
+## Data Splitting 
+X_train, X_test, y_train, y_test = train_test_split(X,y, test_size= 0.3, random_state= 42, stratify= y)
+
+
+==============================================================
+In [5]:
+==============================================================
+#Fitting the pipeline and accuracy of the pipeline   
+pipeline.fit(X_train, y_train)
+
+
+==============================================================
+In [6]:
+==============================================================
+## Accuracy
+test_score = pipeline.score(X_test, y_test) 
+print(f"Pipeline Accuracy\n-----------\ntestscore:{test_score:.3f}")
+
+
+==============================================================
+In [7]:
+==============================================================
+# getting the model prediction 
+
+y_pred = pipeline.predict(X_test)
+
+
+==============================================================
+In [8]:
+==============================================================
+#Confusion Matrix for KNN and plotting 
+conf_matrix = confusion_matrix(y_test, y_pred) 
+
+
+##Plotting confusion Matrix 
+plt.figure(figsize = (10,8))
+sns.heatmap(conf_matrix, annot= True, cmap = "viridis", fmt= "d", xticklabels= labels, yticklabels= labels)
+plt.title("Classification pipeline confusion Matrix") 
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+plt.show()
+
+
+==============================================================
+In [9]:
+==============================================================
+accuracy = accuracy_score(y_test, y_pred) 
+accuracy
+
+
+==============================================================
+In [10]:
+==============================================================
+Pipe_line =  Pipeline([ 
+    ("scaler",StandardScaler()),
+    ("pca",PCA()),
+    ("knn",KNeighborsClassifier()) 
+])
+
+
+==============================================================
+In [11]:
+==============================================================
+#Defining a model parameter grid to search over 
+param_grid = { 
+    "pca__n_components":[2,3],
+    "knn__n_neighbors":[3,5,7] }
+
+
+==============================================================
+In [12]:
+==============================================================
+##choosing a cross validation method 
+cv = StratifiedKFold(n_splits= 5, shuffle=True, random_state= 42)
+
+
+==============================================================
+In [13]:
+==============================================================
+## Determining the best parameters 
+
+best_model = GridSearchCV(estimator= Pipe_line,
+                          param_grid= param_grid,
+                          cv= cv,
+                          scoring= "accuracy", 
+                          verbose= 2 )
+
+
+==============================================================
+In [14]:
+==============================================================
+## Fitting the best model  
+best_model.fit(X_train, y_train)
+
+
+==============================================================
+In [15]:
+==============================================================
+##Evaluating the accuracy of the best model on test set 
+test_score =best_model.score(X_test, y_test) 
+test_score
+
+
+==============================================================
+In [16]:
+==============================================================
+## Displaying the best parameters 
+
+best_model.best_params_
+
+
+==============================================================
+In [17]:
+==============================================================
+#plotting the confusion matrix for predictions on test set 
+
+y_pred_bestm = best_model.predict(X_test)
+
+
+==============================================================
+In [18]: 
+==============================================================
+cm = confusion_matrix(y_test, y_pred_bestm) 
+
+sns.heatmap(cm, annot= True, cmap = "coolwarm", fmt= "d", xticklabels= labels, yticklabels= labels) 
+plt.title("Confusion Matrix for Best Model") 
+plt.xlabel("Actual")
+plt.ylabel("Predicted") 
+plt.show()
+
+
+==============================================================
+Sentiment Analysis
+==============================================================
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.metrics import accuracy_score
+
+
+==============================================================
+In [20]:
+==============================================================
+## Dummy Dataset 
+
+data= { 
+    'text': [ 
+        " I absolutely love this product, it works perfectly!", 
+        "This is the worst purchase I have ever made.",
+        "It's okay, nothing special but does the job.",
+        "Fantastic customer service and beautiful design.",
+        "Horrible quality, it broke on the first day.",
+        "I am highly satisfied with the fast shipping.",
+        "Waste of money. Do not buy this product.",
+        "Pretty good value for the price, I recommend it.", 
+        "item arrived late and the product was damaged, very disappointed." 
+    ],
+    'sentiment': ['positive','negative','neutral', 'positive', 'negative', 'positive', 'negative', 'positive', 'negative'] 
+}
+
+
+==============================================================
+In [21]:
+==============================================================
+## Converting into Pandas DataFrame 
+
+df = pd.DataFrame(data)
+
+
+==============================================================
+In [22]:
+==============================================================
+## Splitting dataframe into features and target 
+
+X = df["text"] 
+y = df["sentiment"]
+
+
+==============================================================
+In [23]:
+==============================================================
+## Splitting data into train and test 
+
+X_train, X_test, y_train, y_test = train_test_split(X,y, test_size= 0.2, random_state= 42)
+
+
+==============================================================
+In [24]:
+==============================================================
+# Text vectorization 
+vectorize = TfidfVectorizer(stop_words= "english", lowercase= True) 
+X_train_vec = vectorize.fit_transform(X_train) 
+X_test_vec = vectorize.transform(X_test)
+
+
+==============================================================
+In [25]:
+==============================================================
+## Initializing and training the classifier 
+
+lr_model=LogisticRegression()
+lr_model.fit(X_train_vec, y_train)
+
+
+==============================================================
+In [26]:
+==============================================================
+nb_model = MultinomialNB() 
+nb_model.fit(X_train_vec,y_train)
+
+
+==============================================================
+In [27]:
+==============================================================
+## Evaluating and comparing the model 
+
+lr_preds = lr_model.predict(X_test_vec) 
+nb_pred = nb_model.predict(X_test_vec)
+
+
+==============================================================
+In [28]:
+==============================================================
+print("---Model Accuracy Comparison---")
+print(f"Logistic regression accuracy: {accuracy_score(y_test,lr_preds)*100:.2f}%")
+print(f"Multinomial Naive bayes accuracy: {accuracy_score(y_test,nb_pred)*100:.2f}%")
+
+
+==============================================================
+In [29]:
+==============================================================
+## Predicting sentiment on new customer text 
+
+def predict_sentiment(new_texts):
+    new_texts_vec = vectorize.transform(new_texts)
+    
+    lr_predictions = lr_model.predict(new_texts_vec)
+    nb_predictions = nb_model.predict(new_texts_vec)
+ 
+    print("--- Testing Custom Input ---")
+    for text, lr_pred, nb_pred in zip(new_texts, lr_predictions, nb_predictions):
+        print(f"Text: '{text}'")
+        print(f"   -> LR Prediction: **{lr_pred.upper()}**")
+        print(f"   -> NB Prediction: **{nb_pred.upper()}**\n")
+
+custom_samples = ["The item arrived broken and late.","it is an amazing product", "It works incredibly well, love it!", "not worht the money","looks good"]
+predict_sentiment(custom_samples)
+
+
+==============================================================
+In [30]:
+==============================================================
+from sklearn.datasets import fetch_20newsgroups
+
+
+==============================================================
+In [31]:
+==============================================================
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.metrics import accuracy_score, classification_report
+
+
+==============================================================
+In [32]:
+==============================================================
+newsgroups = fetch_20newsgroups(
+    subset='all')
+
+
+==============================================================
+In [33]:
+==============================================================
+# Selecting Features and Target
+
+X,y =  newsgroups.data, newsgroups.target
+
+
+==============================================================
+In [34]:
+==============================================================
+# Data Splitting 
+X_train, X_test, y_train, y_test = train_test_split(X,y,test_size= 0.3, random_state= 42)
+
+
+==============================================================
+In [35]:
+==============================================================
+# Initializing Vectorizer 
+
+vectorizer = TfidfVectorizer(stop_words= "english", max_df= 0.5)
+
+
+==============================================================
+In [36]:
+==============================================================
+##Fit and Transform the training data 
+X_train_tfidf = vectorizer.fit_transform(X_train) 
+X_test_tfidf = vectorizer.transform(X_test)
+
+
+==============================================================
+In [37]:
+==============================================================
+## Initializing Multinomial Naive Bayes classifier 
+nb_classifier = MultinomialNB()
+
+
+==============================================================
+In [38]:
+==============================================================
+#Training the classifier 
+nb_classifier.fit(X_train_tfidf, y_train)
+
+
+==============================================================
+In [39]:
+==============================================================
+# Predicting the label test data 
+y_pred = nb_classifier.predict(X_test_tfidf)
+
+
+==============================================================
+In [40]:
+==============================================================
+#Calculating the accuracy 
+accuracy = accuracy_score(y_test, y_pred)
+
+
+==============================================================
+In [41]:
+==============================================================
+#generating classification report   
+class_report = classification_report(y_test, y_pred, target_names= newsgroups.target_names)
+
+
+==============================================================
+In [42]:
+==============================================================
+print("Accuracy:", np.round((accuracy*100),2).astype(str)+'%')
+
+
+==============================================================
+In [43]:
+==============================================================
+print(f"Classification Report:\n, {class_report}")
+
+
+==============================================================
+Random Forest Classifer
+==============================================================
+from sklearn.datasets import load_iris 
+from sklearn.model_selection import train_test_split 
+from sklearn.ensemble import RandomForestClassifier 
+from sklearn.metrics import accuracy_score, classification_report
+
+
+==============================================================
+In [45]:
+==============================================================
+#Dataset 
+data=load_iris()
+x=data.data
+y=data.target
+
+
+==============================================================
+In [46]:
+==============================================================
+x_train, x_test, y_train, y_test= train_test_split(x,y, test_size=0.35, random_state=42)
+
+
+==============================================================
+In [47]:
+==============================================================
+rf_classifier = RandomForestClassifier(n_estimators=100, random_state=42)
+
+
+==============================================================
+In [48]:
+==============================================================
+rf_classifier.fit(x_train,y_train)
+
+
+==============================================================
+In [49]:
+==============================================================
+y_pred=rf_classifier.predict(x_test)
+
+
+==============================================================
+In [50]:
+==============================================================
+accuracy=accuracy_score(y_test,y_pred)
+classification_rep = classification_report(y_test, y_pred)
+print(f"accuracy: {accuracy*100:.2f}%")
+print("classification report:")
+print(classification_rep)
+
+
+==============================================================
+In [52]: XGBoost Classifier
+==============================================================
+import matplotlib.pyplot as plt 
+import pandas as pd  
+import seaborn as sns 
+from sklearn.datasets import load_iris 
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix 
+from sklearn.model_selection import train_test_split 
+from xgboost import XGBClassifier, plot_importance
+
+
+==============================================================
+In [61]:
+==============================================================
+# Load data
+data = load_iris()
+X_df = data.data
+y = data.target
+target_names = data.target_names
+
+
+==============================================================
+In [62]:
+==============================================================
+# Split data: 60% training, 40% holdout
+X_train, X_test, y_train, y_test = train_test_split(
+    X_df, y,
+    test_size=0.4,
+    random_state=42,
+    stratify=y
+)
+
+
+==============================================================
+In [63]:
+==============================================================
+# Train XGBoost
+model = XGBClassifier(
+    objective="multi:softprob",
+    num_class=3,
+    random_state=42,
+    eval_metric="mlogloss"
+)
+
+
+==============================================================
+In [64]:
+==============================================================
+model.fit(X_train, y_train)
+
+
+==============================================================
+In [65]:
+==============================================================
+# Predict
+y_pred = model.predict(X_test)
+
+
+==============================================================
+In [66]:
+==============================================================
+# Evaluate
+print(f"XGBoost Accuracy: {accuracy_score(y_test, y_pred) * 100:.2f}%\n")
+
+print(
+    "Classification Report:\n",
+    classification_report(
+        y_test,
+        y_pred,
+        target_names=data.target_names
+    )
+)
+
+
+==============================================================
+In [67]:
+==============================================================
+cm = confusion_matrix(y_test, y_pred)
+
+
+==============================================================
+In [69]:
+==============================================================
+plt.figure(figsize=(6,4.5))
+sns.heatmap( cm, 
+            annot= True, 
+            fmt = "d", 
+            cmap= "Blues",
+            xticklabels= target_names, 
+            yticklabels= target_names, 
+            cbar= False, 
+            annot_kws= {"size":14, "weight":"bold"}, 
+           )
+plt.title("XGBoost Classification Confusion Matrix", fontsize  =14, pad =15) 
+plt.xlabel("Predicted species group", fontsize = 12) 
+plt.ylabel("Actual species group", fontsize =12) 
+plt.tight_layout()
+plt.show()
+
+
+==============================================================
+In [70]:
+==============================================================
+plt.figure(figsize= (8,4)) 
+plot_importance(model, importance_type= "weight", grid = False, color = "skyblue") 
+plt.title("XGBoost Feature importance(IRIS Dataset)", fontsize = 14, pad =15) 
+plt.tight_layout() 
+plt.show()
+
+
+##########################################
+##### Gaussian Naive Bayes
+# -----------------------------------------------------------------------------
+# 3.8 GAUSSIAN NAIVE BAYES
+# -----------------------------------------------------------------------------
+# GaussianNB expects dense numeric features. One-hot encoding is dense above.
+# It assumes each feature follows a Gaussian distribution within each class.
+
+gaussian_nb_pipeline = Pipeline(steps=[
+    ("preprocessor", preprocessor),
+    ("model", GaussianNB())
+])
+
+gaussian_nb_pipeline.fit(X_train, y_train)
+gaussian_nb_pred = gaussian_nb_pipeline.predict(X_test)
+
+print("Gaussian Naive Bayes")
+print("Accuracy:", accuracy_score(y_test, gaussian_nb_pred))
+print("Precision:", precision_score(y_test, gaussian_nb_pred, average="weighted", zero_division=0))
+print("Recall:", recall_score(y_test, gaussian_nb_pred, average="weighted", zero_division=0))
+print("F1:", f1_score(y_test, gaussian_nb_pred, average="weighted", zero_division=0))
+print(classification_report(y_test, gaussian_nb_pred, zero_division=0))
+
+visualizer = ConfusionMatrix(gaussian_nb_pipeline)
+visualizer.fit(X_train, y_train)
+visualizer.score(X_test, y_test)
+visualizer.show()
+
+visualizer = LearningCurve(
+    gaussian_nb_pipeline,
+    scoring="f1_weighted",
+    cv=classification_cv,
+    n_jobs=-1
+)
+visualizer.fit(X_train, y_train)
+visualizer.show()
+
+# Interpretation:
+# GaussianNB applies Bayes' theorem with a conditional Gaussian assumption for
+# each numeric feature. It is a useful baseline, but correlated features and
+# non-Gaussian distributions can affect its performance.
+
+
+
+
+
+
+
+
+
+
+---------------------------------------------------------------
+A. K-MEANS CLUSTERING — ADDITIONAL CODE
+---------------------------------------------------------------
+
+Important:
+- K-Means is an unsupervised clustering algorithm. It does not use a target label during fitting.
+- The supplied “K Means Clustering” code is actually a KNN classification pipeline (it contains KNeighborsClassifier). Keep that original code unchanged, but do not interpret it as K-Means.
+- K-Means has no standard supervised feature-importance measure and no conventional train/validation learning curve. Use inertia, silhouette score and cluster profiles instead.
+
+A1. Fit K-Means and compare cluster counts
+
+# Scale the features because K-Means is distance-based
+X_scaled = StandardScaler().fit_transform(X)
+
+# Compare inertia and silhouette scores for different numbers of clusters
+inertia = []
+silhouette = []
+
+for k in range(2, 8):
+    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+    cluster_labels = kmeans.fit_predict(X_scaled)
+
+    inertia.append(kmeans.inertia_)
+    silhouette.append(silhouette_score(X_scaled, cluster_labels))
+
+A2. Plot the elbow curve and silhouette scores
+
+plt.figure(figsize=(6, 4))
+plt.plot(range(2, 8), inertia, marker="o")
+plt.xlabel("Number of clusters")
+plt.ylabel("Inertia")
+plt.title("K-Means Elbow Method")
+plt.show()
+
+plt.figure(figsize=(6, 4))
+plt.plot(range(2, 8), silhouette, marker="o")
+plt.xlabel("Number of clusters")
+plt.ylabel("Silhouette Score")
+plt.title("K-Means Silhouette Scores")
+plt.show()
+
+A3. Fit the selected K-Means model
+
+# Select the cluster count based on the elbow and silhouette results
+kmeans_model = KMeans(n_clusters=3, random_state=42, n_init=10)
+clusters = kmeans_model.fit_predict(X_scaled)
+
+print("Inertia:", kmeans_model.inertia_)
+print("Silhouette Score:", silhouette_score(X_scaled, clusters))
+
+A4. Visualize clusters using PCA
+
+X_pca = PCA(n_components=2).fit_transform(X_scaled)
+
+plt.figure(figsize=(7, 5))
+sns.scatterplot(x=X_pca[:, 0], y=X_pca[:, 1], hue=clusters, palette="viridis")
+plt.title("K-Means Clusters (PCA View)")
+plt.xlabel("Principal Component 1")
+plt.ylabel("Principal Component 2")
+plt.show()
+
+A5. Cluster profile
+
+cluster_data = pd.DataFrame(X, columns=data.feature_names)
+cluster_data["Cluster"] = clusters
+
+print(cluster_data.groupby("Cluster").mean().round(2))
+
+---------------------------------------------------------------
+B. RANDOM FOREST CLASSIFIER — ADDITIONAL DIAGNOSTICS
+---------------------------------------------------------------
+
+Run after the supplied Random Forest Classifier code has fitted rf_classifier and created y_pred.
+
+B1. Confusion matrix
+
+cm = confusion_matrix(y_test, y_pred)
+
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+plt.title("Random Forest Classifier - Confusion Matrix")
+plt.show()
+
+B2. Feature importance
+
+rf_importance = pd.DataFrame({
+    "Feature": data.feature_names,
+    "Importance": rf_classifier.feature_importances_
+}).sort_values("Importance", ascending=False)
+
+print(rf_importance)
+
+sns.barplot(data=rf_importance, x="Importance", y="Feature")
+plt.title("Random Forest Classifier - Feature Importance")
+plt.tight_layout()
+plt.show()
+
+B3. Learning curve
+
+visualizer = LearningCurve(
+    rf_classifier,
+    scoring="accuracy",
+    cv=5,
+    n_jobs=-1
+)
+visualizer.fit(x_train, y_train)
+visualizer.show()
+
+---------------------------------------------------------------
+C. XGBOOST CLASSIFIER — ADDITIONAL LEARNING CURVE
+---------------------------------------------------------------
+
+The supplied XGBoost Classifier code already includes:
+- Accuracy and classification report
+- Confusion matrix
+- Feature importance using plot_importance
+
+Run this learning curve after the supplied XGBoost model has been fitted.
+
+visualizer = LearningCurve(
+    model,
+    scoring="accuracy",
+    cv=5,
+    n_jobs=-1
+)
+visualizer.fit(X_train, y_train)
+visualizer.show()
+
+---------------------------------------------------------------
+D. GAUSSIAN NAIVE BAYES — OPTIONAL FEATURE IMPORTANCE
+---------------------------------------------------------------
+
+The supplied GaussianNB code already includes:
+- Accuracy, precision, recall and F1
+- Classification report
+- Confusion matrix
+- Learning curve
+
+Gaussian Naive Bayes does not provide a native tree-style feature_importances_ attribute. If feature contribution is needed, permutation importance can be used as a model-agnostic alternative.
+
+Run only when X_test is a Pandas DataFrame with the original feature columns and gaussian_nb_pipeline has been fitted.
+
+from sklearn.inspection import permutation_importance
+
+nb_permutation = permutation_importance(
+    gaussian_nb_pipeline,
+    X_test,
+    y_test,
+    scoring="f1_weighted",
+    n_repeats=10,
+    random_state=42
+)
+
+nb_importance = pd.DataFrame({
+    "Feature": X_test.columns,
+    "Importance": nb_permutation.importances_mean
+}).sort_values("Importance", ascending=False)
+
+print(nb_importance)
+
+sns.barplot(data=nb_importance, x="Importance", y="Feature")
+plt.title("Gaussian Naive Bayes - Permutation Importance")
+plt.tight_layout()
+plt.show()
+
+
+
+
+===============================================================
+INTERPRETATION NOTES
+===============================================================
+
+1. DATA QUALITY AND PREPARATION
+
+- df.info(): Check whether columns have the expected data types and whether non-null counts suggest missing values.
+- df.describe(): Review the mean, standard deviation, minimum, quartiles and maximum. Unexpected ranges may indicate data-entry problems or outliers.
+- Missing-value percentage: A high percentage may affect whether a feature should be retained, imputed or removed. Decide using domain context.
+- Duplicates: Remove only true duplicate records; repeated transactions or repeated measurements may be legitimate.
+- Correlation heatmap: Values near +1 indicate strong positive linear association; values near -1 indicate strong negative linear association; values near 0 indicate weak linear association. Correlation does not establish causation.
+- Histograms: Look for skewness, multiple peaks, unusual ranges and possible data-quality issues.
+- IQR outliers: The IQR rule flags unusually distant observations; it does not prove that an observation is erroneous. Preserve genuine extreme values when they are meaningful.
+
+2. PREPROCESSING AND DATA LEAKAGE
+
+- Fit imputers, scalers and encoders on training data only. Apply the fitted transformations to test data.
+- A Pipeline containing the preprocessor is generally preferred for model evaluation and cross-validation because transformations are refitted within each training fold.
+- Do not both pre-transform the data and then fit a pipeline that repeats the same preprocessing.
+- For categorical variables, OneHotEncoder(handle_unknown="ignore") allows unseen test categories without raising an error.
+- Scaling is especially important for distance- and margin-based models such as KNN, SVM and K-Means. Tree-based models generally do not require standardization.
+- If the target is continuous, use regression evaluation and do not pass stratify=y to an ordinary train_test_split. If the target is categorical, use classification metrics and consider stratification.
+
+3. REGRESSION METRICS AND DIAGNOSTICS
+
+- R-squared (R²): Measures the proportion of target variation explained by the model relative to a mean-baseline model. Higher is generally better, but a negative test R² means the model performs worse than predicting the test-set mean.
+- MAE: Average absolute prediction error in the target's units. Lower is better.
+- RMSE: Square root of mean squared error, in the target's units. It penalizes large errors more strongly than MAE. Lower is better.
+- Prediction-error plot: Predictions close to the 45-degree diagonal are desirable. Systematic deviations indicate bias or poor fit in parts of the target range.
+- Residual plot: Residuals should ideally be scattered randomly around zero. Curvature may indicate non-linearity; a funnel shape may indicate non-constant error variance; isolated large residuals deserve investigation.
+- A high R² alone does not establish that model assumptions are satisfied or that the model will generalize.
+
+4. CLASSIFICATION METRICS AND DIAGNOSTICS
+
+- Accuracy: Fraction of all predictions that are correct. It can be misleading when classes are imbalanced.
+- Precision: Of the observations predicted as a class, the proportion that truly belong to that class. Important when false positives are costly.
+- Recall: Of the observations truly belonging to a class, the proportion correctly identified. Important when false negatives are costly.
+- F1-score: Harmonic mean of precision and recall. Useful when both matter.
+- Weighted averages: Average class-level metrics weighted by the number of observations in each class. Also inspect per-class scores when class performance matters.
+- Confusion matrix: Rows represent actual classes and columns represent predicted classes in the standard scikit-learn convention. The diagonal contains correct predictions; off-diagonal cells show misclassifications.
+- ROC-AUC: Measures ranking discrimination across thresholds. For binary classification, a higher value is generally better; interpret with class balance and the business problem in mind.
+- Precision-recall curve: Often more informative than ROC when the positive class is rare. Focus on the precision/recall trade-off relevant to the use case.
+- Classification report: Review precision, recall, F1 and support for each class, not only the overall accuracy.
+
+5. LEARNING CURVE — HOW TO READ IT
+
+- Training and validation scores both high and close together: The model is likely generalizing reasonably well.
+- Training score high but validation score much lower: Possible overfitting/high variance.
+- Both scores low and close together: Possible underfitting/high bias.
+- Validation score still improving as training size increases: More training data may help.
+- A persistent gap between training and validation scores suggests the model may need simpler settings, stronger regularization, more data or better features.
+- Learning curves are diagnostic aids, not proof of model quality. Use a scoring metric appropriate to the task.
+
+6. FEATURE IMPORTANCE AND SHAP
+
+- Tree feature importance is a model-specific measure of how the fitted model used features. It is not a causal effect and can be biased by feature scale, cardinality or correlated predictors.
+- XGBoost gain importance measures the improvement in the objective attributed to splits using a feature. Weight counts split frequency; cover measures the observations affected by splits. These measures answer different questions.
+- SHAP values describe how features contribute to individual predictions relative to a model baseline. Positive and negative values move predictions in different directions, depending on the model output scale.
+- Correlated features can share or redistribute importance. Interpret rankings alongside domain knowledge and model performance.
+- Gaussian Naive Bayes has no built-in tree-style feature importance. Permutation importance measures the drop in a chosen score when a feature is shuffled; a larger drop suggests greater predictive reliance in that evaluation dataset.
+- Importance is not causality. Do not conclude that changing a feature will cause the prediction or outcome to change.
+
