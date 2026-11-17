@@ -154,7 +154,14 @@ df = df.drop_duplicates()
 # Check again after cleaning
 print(df.shape)
 print(df.isnull().sum())
+# Target Variable balancing check
 
+target_details = pd.DataFrame({
+    'Count': data['churn'].value_counts(), 
+    'Percentage': data['churn'].value_counts(normalize = True).mul(100).round(2)
+})
+
+target_details
 ---------------------------------------------------------------
 6. CHECK AND FIX DATA TYPES (ONLY IF REQUIRED)
 ---------------------------------------------------------------
