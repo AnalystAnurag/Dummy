@@ -60,6 +60,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.datasets import load_iris, fetch_20newsgroups
 
 # Evaluation
+from sklearn.inspection import permutation_importance
+
 from sklearn.metrics import (
     r2_score,
     mean_absolute_error,
@@ -1026,61 +1028,175 @@ visualizer.show()
 # -----------------------------------------------------------------------------
 # 3.4 SUPPORT VECTOR CLASSIFIER (SVC)
 # -----------------------------------------------------------------------------
+## Linear SVC
 
-# 1. Hyperparameter Tuning
+# -----------------------------------------------------------------------------
+# 1. LINEAR SVC - HYPERPARAMETER TUNING
+# -----------------------------------------------------------------------------
+
+linear_svc_pipeline = Pipeline([
+    ("preprocessor", preprocessor),
+    ("model", LinearSVC(
+        class_weight="balanced",
+        random_state=RANDOM_STATE
+    ))
+])
+
+linear_svc_grid = {
+    "model__C": [0.01, 0.1, 1, 10, 100],
+    "model__loss": ["hinge", "squared_hinge"]
+}
+
+linear_svc_search = GridSearchCV(
+    linear_svc_pipeline,
+    linear_svc_grid,
+    cv=classification_cv,
+    scoring="f1_weighted",
+    n_jobs=-1
+)
+
+linear_svc_search.fit(X_train, y_train)
+
+linear_svc_model = linear_svc_search.best_estimator_
+
+linear_svc_pred = linear_svc_model.predict(X_test)
+
+
+# -----------------------------------------------------------------------------
+# 2. MODEL EVALUATION
+# -----------------------------------------------------------------------------
+
+print("Best Parameters:", linear_svc_search.best_params_)
+print("Best CV F1:", linear_svc_search.best_score_)
+print("Accuracy:", accuracy_score(y_test, linear_svc_pred))
+
+print(classification_report(
+    y_test, linear_svc_pred, zero_division=0
+))
+
+
+# -----------------------------------------------------------------------------
+# 3. CLASSIFICATION DIAGNOSTICS
+# -----------------------------------------------------------------------------
+
+for plot in [ClassificationReport, ConfusionMatrix]:
+
+    visualizer = plot(linear_svc_model)
+    visualizer.fit(X_train, y_train)
+    visualizer.score(X_test, y_test)
+    visualizer.show()
+
+
+# -----------------------------------------------------------------------------
+# 4. ROC-AUC (BINARY CLASSIFICATION)
+# -----------------------------------------------------------------------------
+
+if len(np.unique(y_train)) == 2:
+
+    visualizer = ROCAUC(linear_svc_model)
+    visualizer.fit(X_train, y_train)
+    visualizer.score(X_test, y_test)
+    visualizer.show()
+
+
+# -----------------------------------------------------------------------------
+# 5. LEARNING CURVE
+# -----------------------------------------------------------------------------
+
+visualizer = LearningCurve(
+    linear_svc_model,
+    cv=classification_cv,
+    scoring="f1_weighted",
+    n_jobs=-1
+)
+
+visualizer.fit(X_train, y_train)
+visualizer.show()
+
+
+#### Simple SVC for non linear relationship
+# -----------------------------------------------------------------------------
+# 1. SVC (RBF) - HYPERPARAMETER TUNING
+# -----------------------------------------------------------------------------
 
 svc_pipeline = Pipeline([
     ("preprocessor", preprocessor),
-    ("model", SVC(probability=True, random_state=RANDOM_STATE))
+    ("model", SVC(
+        kernel="rbf",
+        class_weight="balanced",
+        probability=True,
+        random_state=RANDOM_STATE
+    ))
 ])
 
 svc_grid = {
-    "model__kernel": ["linear", "rbf"],
     "model__C": [0.1, 1, 10, 100],
-    "model__gamma": ["scale", "auto"]
+    "model__gamma": ["scale", "auto", 0.01, 0.1, 1]
 }
 
 svc_search = GridSearchCV(
-    svc_pipeline, svc_grid,
-    cv=classification_cv, scoring="f1_weighted", n_jobs=-1
-).fit(X_train, y_train)
+    svc_pipeline,
+    svc_grid,
+    cv=classification_cv,
+    scoring="f1_weighted",
+    n_jobs=-1
+)
+
+svc_search.fit(X_train, y_train)
 
 svc_model = svc_search.best_estimator_
+
 svc_pred = svc_model.predict(X_test)
 
 
-# 2. Model Evaluation
+# -----------------------------------------------------------------------------
+# 2. MODEL EVALUATION
+# -----------------------------------------------------------------------------
 
 print("Best Parameters:", svc_search.best_params_)
 print("Best CV F1:", svc_search.best_score_)
 print("Accuracy:", accuracy_score(y_test, svc_pred))
-print(classification_report(y_test, svc_pred, zero_division=0))
+
+print(classification_report(
+    y_test, svc_pred, zero_division=0
+))
 
 
-# 3. Classification Diagnostics
+# -----------------------------------------------------------------------------
+# 3. CLASSIFICATION DIAGNOSTICS
+# -----------------------------------------------------------------------------
 
 for plot in [ClassificationReport, ConfusionMatrix]:
+
     visualizer = plot(svc_model)
     visualizer.fit(X_train, y_train)
     visualizer.score(X_test, y_test)
     visualizer.show()
 
 
-# 4. ROC-AUC (Binary Classification)
+# -----------------------------------------------------------------------------
+# 4. ROC-AUC (BINARY CLASSIFICATION)
+# -----------------------------------------------------------------------------
 
 if len(np.unique(y_train)) == 2:
+
     visualizer = ROCAUC(svc_model)
     visualizer.fit(X_train, y_train)
     visualizer.score(X_test, y_test)
     visualizer.show()
 
 
-# 5. Learning Curve
+# -----------------------------------------------------------------------------
+# 5. LEARNING CURVE
+# -----------------------------------------------------------------------------
 
 visualizer = LearningCurve(
-    svc_model, cv=classification_cv,
-    scoring="f1_weighted", n_jobs=-1
+    svc_model,
+    cv=classification_cv,
+    scoring="f1_weighted",
+    n_jobs=-1
 )
+
 visualizer.fit(X_train, y_train)
 visualizer.show()
 ########################################
@@ -1158,6 +1274,7 @@ X_processed = preprocessor.fit_transform(X)
 ### Training model
 
 inertia = []
+silhouette_scores = []
 
 for k in range(2, 11):
     kmeans = KMeans(
@@ -1165,9 +1282,10 @@ for k in range(2, 11):
         random_state=42,
         n_init=10
     )
-    
-    kmeans.fit(X_processed)
+
+    cluster_labels = kmeans.fit_predict(X_processed)
     inertia.append(kmeans.inertia_)
+    silhouette_scores.append(silhouette_score(X_processed, cluster_labels))
 
 ### Elbow Method
 plt.plot(range(2, 11), inertia, marker="o")
@@ -1176,7 +1294,14 @@ plt.ylabel("Inertia")
 plt.title("Elbow Method")
 plt.show()
 
-### put the value of k from elbow method
+### Silhouette Score Plot
+plt.plot(range(2, 11), silhouette_scores, marker="o")
+plt.xlabel("Number of Clusters")
+plt.ylabel("Silhouette Score")
+plt.title("K-Means Silhouette Analysis")
+plt.show()
+
+### put the value of k from elbow and silhouette analysis
 kmeans = KMeans(
     n_clusters=K,
     random_state=42,
@@ -1668,47 +1793,65 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 
 
-==============================================================
-In [45]:
-==============================================================
-#Dataset 
+#Dataset  preparation and data splitting
 data=load_iris()
 x=data.data
 y=data.target
 
 
-==============================================================
-In [46]:
-==============================================================
 x_train, x_test, y_train, y_test= train_test_split(x,y, test_size=0.35, random_state=42)
 
 
-==============================================================
-In [47]:
-==============================================================
+## Model build
+
 rf_classifier = RandomForestClassifier(n_estimators=100, random_state=42)
 
 
-==============================================================
-In [48]:
-==============================================================
+# Model fit
 rf_classifier.fit(x_train,y_train)
 
 
-==============================================================
-In [49]:
-==============================================================
+## Predict
 y_pred=rf_classifier.predict(x_test)
 
 
-==============================================================
-In [50]:
-==============================================================
+# Classification report & Accuracy score
 accuracy=accuracy_score(y_test,y_pred)
 classification_rep = classification_report(y_test, y_pred)
 print(f"accuracy: {accuracy*100:.2f}%")
 print("classification report:")
 print(classification_rep)
+
+
+# 1. Confusion Matrix
+cm = confusion_matrix(y_test, y_pred)
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+plt.title("Random Forest Classifier - Confusion Matrix")
+plt.show()
+
+# 2. Feature Importance
+rf_importance = pd.DataFrame({
+    "Feature": data.feature_names,
+    "Importance": rf_classifier.feature_importances_
+}).sort_values("Importance", ascending=False)
+
+print(rf_importance)
+sns.barplot(data=rf_importance, x="Importance", y="Feature")
+plt.title("Random Forest Classifier - Feature Importance")
+plt.tight_layout()
+plt.show()
+
+# 3. Learning Curve
+visualizer = LearningCurve(
+    rf_classifier,
+    scoring="accuracy",
+    cv=5,
+    n_jobs=-1
+)
+visualizer.fit(x_train, y_train)
+visualizer.show()
 
 
 ==============================================================
@@ -1722,10 +1865,6 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 from sklearn.model_selection import train_test_split 
 from xgboost import XGBClassifier, plot_importance
 
-
-==============================================================
-In [61]:
-==============================================================
 # Load data
 data = load_iris()
 X_df = data.data
@@ -1733,9 +1872,6 @@ y = data.target
 target_names = data.target_names
 
 
-==============================================================
-In [62]:
-==============================================================
 # Split data: 60% training, 40% holdout
 X_train, X_test, y_train, y_test = train_test_split(
     X_df, y,
@@ -1745,9 +1881,6 @@ X_train, X_test, y_train, y_test = train_test_split(
 )
 
 
-==============================================================
-In [63]:
-==============================================================
 # Train XGBoost
 model = XGBClassifier(
     objective="multi:softprob",
@@ -1757,22 +1890,13 @@ model = XGBClassifier(
 )
 
 
-==============================================================
-In [64]:
-==============================================================
 model.fit(X_train, y_train)
 
 
-==============================================================
-In [65]:
-==============================================================
 # Predict
 y_pred = model.predict(X_test)
 
 
-==============================================================
-In [66]:
-==============================================================
 # Evaluate
 print(f"XGBoost Accuracy: {accuracy_score(y_test, y_pred) * 100:.2f}%\n")
 
@@ -1786,15 +1910,9 @@ print(
 )
 
 
-==============================================================
-In [67]:
-==============================================================
 cm = confusion_matrix(y_test, y_pred)
 
 
-==============================================================
-In [69]:
-==============================================================
 plt.figure(figsize=(6,4.5))
 sns.heatmap( cm, 
             annot= True, 
@@ -1812,14 +1930,24 @@ plt.tight_layout()
 plt.show()
 
 
-==============================================================
-In [70]:
-==============================================================
+# Feature Importance
+
 plt.figure(figsize= (8,4)) 
 plot_importance(model, importance_type= "weight", grid = False, color = "skyblue") 
 plt.title("XGBoost Feature importance(IRIS Dataset)", fontsize = 14, pad =15) 
 plt.tight_layout() 
 plt.show()
+
+# Learning Curve
+
+visualizer = LearningCurve(
+    model,
+    scoring="accuracy",
+    cv=5,
+    n_jobs=-1
+)
+visualizer.fit(X_train, y_train)
+visualizer.show()
 
 
 ##########################################
@@ -1859,6 +1987,34 @@ visualizer = LearningCurve(
 visualizer.fit(X_train, y_train)
 visualizer.show()
 
+# -----------------------------------------------------------------------------
+# GAUSSIAN NAIVE BAYES - PERMUTATION FEATURE IMPORTANCE (OPTIONAL)
+# -----------------------------------------------------------------------------
+# GaussianNB has no native feature_importances_ attribute.
+# Permutation importance estimates how much the selected score drops when
+# each original input feature is shuffled.
+
+nb_permutation = permutation_importance(
+    gaussian_nb_pipeline,
+    X_test,
+    y_test,
+    scoring="f1_weighted",
+    n_repeats=10,
+    random_state=42,
+    n_jobs=-1
+)
+
+nb_importance = pd.DataFrame({
+    "Feature": X_test.columns,
+    "Importance": nb_permutation.importances_mean
+}).sort_values("Importance", ascending=False)
+
+print(nb_importance)
+sns.barplot(data=nb_importance, x="Importance", y="Feature")
+plt.title("Gaussian Naive Bayes - Permutation Importance")
+plt.tight_layout()
+plt.show()
+
 # Interpretation:
 # GaussianNB applies Bayes' theorem with a conditional Gaussian assumption for
 # each numeric feature. It is a useful baseline, but correlated features and
@@ -1869,175 +2025,6 @@ visualizer.show()
 
 
 
-
-
-
-
----------------------------------------------------------------
-A. K-MEANS CLUSTERING — ADDITIONAL CODE
----------------------------------------------------------------
-
-Important:
-- K-Means is an unsupervised clustering algorithm. It does not use a target label during fitting.
-- The supplied “K Means Clustering” code is actually a KNN classification pipeline (it contains KNeighborsClassifier). Keep that original code unchanged, but do not interpret it as K-Means.
-- K-Means has no standard supervised feature-importance measure and no conventional train/validation learning curve. Use inertia, silhouette score and cluster profiles instead.
-
-A1. Fit K-Means and compare cluster counts
-
-# Scale the features because K-Means is distance-based
-X_scaled = StandardScaler().fit_transform(X)
-
-# Compare inertia and silhouette scores for different numbers of clusters
-inertia = []
-silhouette = []
-
-for k in range(2, 8):
-    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-    cluster_labels = kmeans.fit_predict(X_scaled)
-
-    inertia.append(kmeans.inertia_)
-    silhouette.append(silhouette_score(X_scaled, cluster_labels))
-
-A2. Plot the elbow curve and silhouette scores
-
-plt.figure(figsize=(6, 4))
-plt.plot(range(2, 8), inertia, marker="o")
-plt.xlabel("Number of clusters")
-plt.ylabel("Inertia")
-plt.title("K-Means Elbow Method")
-plt.show()
-
-plt.figure(figsize=(6, 4))
-plt.plot(range(2, 8), silhouette, marker="o")
-plt.xlabel("Number of clusters")
-plt.ylabel("Silhouette Score")
-plt.title("K-Means Silhouette Scores")
-plt.show()
-
-A3. Fit the selected K-Means model
-
-# Select the cluster count based on the elbow and silhouette results
-kmeans_model = KMeans(n_clusters=3, random_state=42, n_init=10)
-clusters = kmeans_model.fit_predict(X_scaled)
-
-print("Inertia:", kmeans_model.inertia_)
-print("Silhouette Score:", silhouette_score(X_scaled, clusters))
-
-A4. Visualize clusters using PCA
-
-X_pca = PCA(n_components=2).fit_transform(X_scaled)
-
-plt.figure(figsize=(7, 5))
-sns.scatterplot(x=X_pca[:, 0], y=X_pca[:, 1], hue=clusters, palette="viridis")
-plt.title("K-Means Clusters (PCA View)")
-plt.xlabel("Principal Component 1")
-plt.ylabel("Principal Component 2")
-plt.show()
-
-A5. Cluster profile
-
-cluster_data = pd.DataFrame(X, columns=data.feature_names)
-cluster_data["Cluster"] = clusters
-
-print(cluster_data.groupby("Cluster").mean().round(2))
-
----------------------------------------------------------------
-B. RANDOM FOREST CLASSIFIER — ADDITIONAL DIAGNOSTICS
----------------------------------------------------------------
-
-Run after the supplied Random Forest Classifier code has fitted rf_classifier and created y_pred.
-
-B1. Confusion matrix
-
-cm = confusion_matrix(y_test, y_pred)
-
-sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
-plt.xlabel("Predicted")
-plt.ylabel("Actual")
-plt.title("Random Forest Classifier - Confusion Matrix")
-plt.show()
-
-B2. Feature importance
-
-rf_importance = pd.DataFrame({
-    "Feature": data.feature_names,
-    "Importance": rf_classifier.feature_importances_
-}).sort_values("Importance", ascending=False)
-
-print(rf_importance)
-
-sns.barplot(data=rf_importance, x="Importance", y="Feature")
-plt.title("Random Forest Classifier - Feature Importance")
-plt.tight_layout()
-plt.show()
-
-B3. Learning curve
-
-visualizer = LearningCurve(
-    rf_classifier,
-    scoring="accuracy",
-    cv=5,
-    n_jobs=-1
-)
-visualizer.fit(x_train, y_train)
-visualizer.show()
-
----------------------------------------------------------------
-C. XGBOOST CLASSIFIER — ADDITIONAL LEARNING CURVE
----------------------------------------------------------------
-
-The supplied XGBoost Classifier code already includes:
-- Accuracy and classification report
-- Confusion matrix
-- Feature importance using plot_importance
-
-Run this learning curve after the supplied XGBoost model has been fitted.
-
-visualizer = LearningCurve(
-    model,
-    scoring="accuracy",
-    cv=5,
-    n_jobs=-1
-)
-visualizer.fit(X_train, y_train)
-visualizer.show()
-
----------------------------------------------------------------
-D. GAUSSIAN NAIVE BAYES — OPTIONAL FEATURE IMPORTANCE
----------------------------------------------------------------
-
-The supplied GaussianNB code already includes:
-- Accuracy, precision, recall and F1
-- Classification report
-- Confusion matrix
-- Learning curve
-
-Gaussian Naive Bayes does not provide a native tree-style feature_importances_ attribute. If feature contribution is needed, permutation importance can be used as a model-agnostic alternative.
-
-Run only when X_test is a Pandas DataFrame with the original feature columns and gaussian_nb_pipeline has been fitted.
-
-from sklearn.inspection import permutation_importance
-
-nb_permutation = permutation_importance(
-    gaussian_nb_pipeline,
-    X_test,
-    y_test,
-    scoring="f1_weighted",
-    n_repeats=10,
-    random_state=42
-)
-
-nb_importance = pd.DataFrame({
-    "Feature": X_test.columns,
-    "Importance": nb_permutation.importances_mean
-}).sort_values("Importance", ascending=False)
-
-print(nb_importance)
-
-sns.barplot(data=nb_importance, x="Importance", y="Feature")
-plt.title("Gaussian Naive Bayes - Permutation Importance")
-plt.tight_layout()
-plt.show()
 
 
 
