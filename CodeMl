@@ -189,6 +189,24 @@ plt.show()
 # plt.xticks(rotation=45)
 # plt.show()
 
+#-----------------------------------------------------------
+To filter data on top 10 highly correlated features 
+# 1. Calculate correlation with target
+correlation = X.corrwith(y)
+
+# 2. Select Top 10 correlated features
+top_10_features = correlation.abs().nlargest(10).index
+
+# 3. Create a new DataFrame
+top_10_df = X[top_10_features].copy()
+
+# 4. Add target variable
+top_10_df[y.name] = y
+
+# 5. Display DataFrame
+top_10_df.head()
+#-----------------------------------------------------------
+
 ---------------------------------------------------------------
 8. DEFINE FEATURES (X) AND TARGET (y)
 ---------------------------------------------------------------
