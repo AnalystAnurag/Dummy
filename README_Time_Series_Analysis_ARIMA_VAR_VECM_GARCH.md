@@ -1,17 +1,3 @@
-# R Time Series Analysis: ARIMA, VAR–VECM and GARCH
-
-A consolidated, step-by-step R reference for time-series concepts, forecasting, multivariate relationships and volatility modelling.
-
-## Table of contents
-
-1. [Packages and libraries](#1-packages-and-libraries)
-2. [Part I – ARIMA concepts and forecasting](#part-i--arima-concepts-and-forecasting)
-3. [Part II – VAR and VECM](#part-ii--var-and-vecm)
-4. [Part III – GARCH models](#part-iii--garch-models)
-5. [Notes before running the scripts](#notes-before-running-the-scripts)
-
----
-
 ## 1. Packages and libraries
 
 Install once, if not already installed:
@@ -24,9 +10,6 @@ install.packages(c(
   "xts", "FinTS", "rugarch", "rmgarch", "BEKKs", "MTS"
 ))
 ```
-
-Load at the beginning of each R session:
-
 ```r
 library(readxl)
 library(TTR)
@@ -54,15 +37,11 @@ library(BEKKs)
 library(MTS)
 ```
 
-> **Package note:** The consolidated list includes packages used or referenced in both source documents. Some are optional for specific sections, such as `pdfetch` and `quantmod` for Yahoo Finance downloads.
 
-> **Interpretation convention:** A p-value below 0.05 is commonly treated as statistically significant. Always check the null hypothesis of the specific test before interpreting its p-value.
-
----
 
 ## Part I – ARIMA concepts and forecasting
 
-> **Formatting:** Markdown headings (`#`), R code fences (```r), LaTeX hypothesis blocks (`$$`), and interpretation bullets are intentionally preserved.
+
 ## Downloading data from Yahoo Finance
 
 ```r
@@ -252,11 +231,7 @@ dygraph(semi_xts, main = "Nifty 50: Semi-Average Trend") %>%
 ```
 
 
-### Arima  #################################################### ##Required Libraries
-
-
-```r
-```
+### Arima  #################################################### 
 
 ## Data import
 
@@ -1518,16 +1493,4 @@ print(fit$G_t)
 
 cat("\nG Matrix - p-values\n")
 
-
 print(G_pvalue)
-```
-
----
-
-## Notes before running the scripts
-
-- Update the Excel file paths (for example, `D:/Msc BA Classnotes/...`) to match your computer.
-- The examples use different datasets for Nifty 50, sector indices, and Nifty/Gold/Crude. Load the appropriate dataset before running each section.
-- Daily market observations are trading sessions, not every calendar day. Calendar-day sequences created with `seq.Date(..., by = "day")` may not match actual trading dates.
-- The original source commands and model specifications have been retained. Review the repeated ARIMA order for `m2` and `m3`, and the GJR-GARCH residual-object references noted in the diagnostics, before running those sections.
-- Run the guide section by section because later steps depend on objects created earlier.
