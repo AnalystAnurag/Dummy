@@ -1,0 +1,1764 @@
+install.packages(c(
+  "readxl",
+  "TTR",
+  "dygraphs",
+  "zoo",
+  "forecast",
+  "tseries",
+  "ggplot2",
+  "dplyr",
+  "tidyr",
+  "moments",
+  "vars",
+  "mFilter",
+  "tidyverse",
+  "urca",
+  "stargazer",
+  "tsDyn",
+  "pdfetch",
+  "quantmod",
+  "xts",
+  "FinTS",
+  "rugarch",
+  "rmgarch",
+  "BEKKs",
+  "MTS"
+))
+
+
+
+library(readxl)
+library(TTR)
+library(dygraphs)
+library(zoo)
+library(forecast)
+library(tseries)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(moments)
+library(vars)
+library(mFilter)
+library(tidyverse)
+library(urca)
+library(stargazer)
+library(tsDyn)
+library(pdfetch)
+library(quantmod)
+library(xts)
+library(FinTS)
+library(rugarch)
+library(rmgarch)
+library(BEKKs)
+library(MTS)
+
+## Downloading data from Yahoo Finance
+
+```{r}
+#remove.packages("pdfetch")
+```
+
+```{r}
+#nifty_50 <-  pdfetch_YAHOO("^NSEI")
+#nifty_50
+```
+
+```{r}
+#plot(nifty_50$`^NSEI.close`)
+```
+
+
+INTERPRETATION:
+- The date range tells us the sample period.
+- The observation count indicates the amount of available information.
+- A numeric variable should be stored as numeric, not as text.
+- Check whether the series is daily, weekly, monthly, quarterly or annual.
+
+## Another method to download the data
+
+```{r}
+#library(quantmod)
+```
+
+```{r}
+#getSymbols("^NSEI", open= "2021-01-01", close = "2026-09-19")
+#View(NSEI)
+```
+
+```{r}
+#plot.ts(NSEI$NSEI.Close)
+```
+
+```{r}
+
+INTERPRETATION:
+- The date range tells us the sample period.
+- The observation count indicates the amount of available information.
+- A numeric variable should be stored as numeric, not as text.
+- Check whether the series is daily, weekly, monthly, quarterly or annual.
+
+## Downloading multiple dataset
+#library(pdfetch)
+#x=pdfetch_YAHOO(c("^NSEI","ITC.NS","SBIN.NS","RELIANCE.NS"),
+           "close",from="2015-01-01",to="2026-08-05")
+#View(x)
+#data=read.delim("clipboard")
+#data
+```
+
+```{r}
+data("AirPassengers")
+air<- AirPassengers
+str(air)
+
+```
+
+```{r}
+head(air)
+```
+
+```{r}
+ts(air, frequency = 12, start=c(1949,1))
+```
+
+```{r}
+attributes(air)
+```
+
+```{r}
+# Log Transformation
+
+lair<- log(air)
+lair
+```
+
+```{r}
+decomp <- decompose(air)
+decomp$figure
+plot(decomp$figure,
+     type = 'b',
+     xlab= 'Month',
+     ylab= "Seasonality Index",
+     col = "blue",
+     las = 2)
+
+plot(decomp)
+
+INTERPRETATION:
+- In additive decomposition, observed = trend + seasonal + irregular. The trend shows long-run movement; the seasonal component shows recurring within-period effects; the irregular component is what remains.
+- A positive seasonal effect means the period is above the trend; a negative effect means it is below the trend. Check whether residual variation changes over time.
+```
+
+#### Interpretation:
+
+#### Seasonality Plot
+
+- Under an additive decomposition, July tends to be approximately 64 units higher than the underlying trend, purely because of seasonal effects.
+- November tends to be approximately 54 units below the underlying trend because of seasonality.
+- July to September, there is increasing effect and October to December its showing declining effect.
+
+#### Decomposition Plot
+
+- The additive decomposition indicates that the time series contains three major systematic features: a strong upward trend, a pronounced and recurring 12-month seasonal pattern, and an irregular component fluctuating around zero. The trend component shows sustained growth over the study period, while the seasonal component exhibits a highly consistent pattern, with positive effects during the middle months of the year and negative effects toward the beginning and end of the year. The residual component does not display a clear systematic pattern, although its variability appears to increase in the later period.
+
+#########################################Data-Set##############################################
+
+```{r}
+nft_50 <- read_excel("D:/Msc BA Classnotes/Sem 3/Time series Analysis/Nifty 50.xlsx")
+nft_50
+```
+
+```{r}
+nft_50$Date <- as.Date(nft_50$Date)
+```
+
+```{r}
+names(nft_50)<- c('Date','Price')
+```
+
+```{r}
+nft_50 <- nft_50[order(nft_50$Date),]
+```
+
+```{r}
+nft_50<- na.omit(nft_50)
+```
+
+```{r}
+#plotting original daily price
+
+plot(nft_50$Date, nft_50$Price, type = "l",
+     main = "Nifty 50", xlab ="Date", ylab="Price")
+```
+
+```{r}
+## Moving Average
+```
+
+```{r}
+nft_50$ma_5 <- SMA(nft_50$Price, 5)
+nft_50$ma_30 <- SMA(nft_50$Price, 30)
+nft_50$ma_90 <- SMA(nft_50$Price, 90)
+
+```
+
+```{r}
+# Convert to xts
+data_xts <- xts::xts(
+  nft_50[, c("Price", "ma_5", "ma_30", "ma_90")],
+  order.by = nft_50$Date
+)
+
+# Interactive plot
+dygraph(data_xts, main = "Nifty 50 Moving Averages") %>%
+  dyRangeSelector()
+
+INTERPRETATION:
+- Moving averages smooth short-term fluctuations. A longer window gives a smoother line but responds more slowly to turning points.
+- Compare the price series with each moving-average line to identify broad direction and possible trend changes.
+```
+
+#### Least-squares Method
+
+```{r}
+nft_50$t <- 1:nrow(nft_50)
+
+model <- lm(Price ~ t, data = nft_50)
+
+nft_50$LS_Trend <- fitted(model)
+
+ls_xts <- xts(
+  nft_50[, c("Price", "LS_Trend")],
+  order.by = nft_50$Date
+)
+
+dygraph(ls_xts, main = "Nifty 50: Least Squares Trend") %>%
+  dyRangeSelector()
+
+```
+
+#### Semi averages
+
+```{r}
+n <- nrow(nft_50)
+h <- floor(n / 2)
+
+mean1 <- mean(nft_50$Price[1:h])
+mean2 <- mean(nft_50$Price[(h + 1):n])
+
+nft_50$SemiAvg <- c(
+  rep(mean1, h),
+  rep(mean2, n - h)
+)
+
+semi_xts <- xts(
+  nft_50[, c("Price", "SemiAvg")],
+  order.by = nft_50$Date
+)
+
+dygraph(semi_xts, main = "Nifty 50: Semi-Average Trend") %>%
+  dyRangeSelector()
+```
+
+============================================================\n\n\n
+INTERPRETATION NOTES – NORMAL TIME SERIES ANALYSIS
+--------------------------------------------------
+- A time plot is an exploratory tool. Look for trend, seasonality, structural changes, outliers and changing variance.
+- A log transformation is suitable only when observations are positive. Differences in log values approximate proportional/percentage changes for small movements.
+- In additive decomposition, observed = trend + seasonal + irregular. In multiplicative decomposition, observed = trend × seasonal × irregular.
+- A seasonal index above the additive baseline indicates a month/period that tends to be above the trend; below the baseline indicates a negative seasonal contribution.
+- Moving averages smooth short-term fluctuations. A longer window produces a smoother series but reacts more slowly to changes.
+- Least-squares trend estimates a fitted deterministic trend over the sample. Semi-averages provide a simple two-period trend approximation.
+- `skewness()` describes asymmetry: positive values indicate right-skew; negative values indicate left-skew.
+- `kurtosis()` interpretation depends on the package's definition. For `moments::kurtosis`, a value around 3 is approximately normal-like; above 3 is leptokurtic and below 3 is platykurtic.
+- Do not infer stationarity from a plot alone. Use formal tests such as ADF and KPSS in the ARIMA/VAR sections.
+
+------------------------------------------– TRADITIONAL ARIMA\n------------------------------------------------------------
+
+## Data import
+
+```{r}
+nift <- read_excel("D:/Msc BA Classnotes/Sem 3/Time series Analysis/Nifty 50.xlsx")
+nift
+```
+
+
+INTERPRETATION:
+- The date range tells us the sample period.
+- The observation count indicates the amount of available information.
+- A numeric variable should be stored as numeric, not as text.
+- Check whether the series is daily, weekly, monthly, quarterly or annual.
+
+### Data Cleaning
+
+```{r}
+nift$Date <- as.Date(nift$Date)
+nift <- na.omit(nift)
+```
+
+```{r}
+nift$Price <- as.numeric(gsub(",","", nift$Price))
+```
+
+## Converting data to zoo series
+
+```{r}
+nft_y <- zoo(nift$Price, order.by = nift$Date)
+```
+
+```{r}
+nft_y <- ts(coredata(nft_y))
+```
+
+### Performing Stationary test
+
+$$
+\begin{aligned}
+  H_0 &: \text{The time series is non-stationary (contains a unit root)} \\
+  H_1 &: \text{The time series is stationary}
+\end{aligned}
+$$
+
+```{r}
+adf.test(nft_y)
+```
+
+
+INTERPRETATION:
+| Test | p-value | Decision |
+|---|---:|---|
+| ADF | Below 0.05 | Reject unit-root null; evidence supports stationarity |
+| ADF | Above 0.05 | Fail to reject unit-root null; insufficient evidence of stationarity |
+| KPSS | Below 0.05 | Reject stationarity null; evidence supports non-stationarity |
+| KPSS | Above 0.05 | Fail to reject stationarity null |
+
+The ADF and KPSS tests have opposite null hypotheses. Reading them together provides a more informative assessment. Results can sometimes be inconclusive or conflicting.
+
+#### Interpretation:
+
+- As the p-value is greater than 0.05, we fail to reject the null hypothesis and conclude that the data is non stationary.
+
+```{r}
+kpss.test(nft_y)
+```
+
+#### Interpretation:
+
+- Given the p-value is less than 0.05, we reject the null hypothesis and conclude that data is non stationary.
+
+## Converting data to stationary series
+
+```{r}
+nft_yy <- diff(nft_y)
+```
+
+
+INTERPRETATION:
+- If the original series is non-stationary but the first difference is stationary, the series is commonly treated as I(1), so d = 1.
+- If the original series is already stationary, d = 0.
+- Avoid over-differencing. Excessive differencing can introduce unnecessary noise and distort the autocorrelation structure.
+
+## Further checking stationarity
+
+```{r}
+adf.test(nft_yy)
+```
+
+## Removing Na values from the difference series
+
+```{r}
+nft_yy_clean <- na.omit(nft_yy)
+```
+
+#### Interpretation:
+
+- As the p-value is less than 0.05, we reject the null hypothesis concluding that data is stationary at first order difference.
+
+## Performing ACF & PACF plot
+
+```{r}
+#ACF for MA term
+#PACF for AR term
+acf(nft_yy_clean, main="ACF of first differenced series", na.action = na.pass)
+pacf(nft_yy_clean, main="PACF of first differenced series", na.action = na.pass)
+```
+
+
+INTERPRETATION:
+- **ACF:** Shows correlation between the series and its lagged values.
+- **PACF:** Shows the relationship with a particular lag after controlling for shorter lags.
+- A PACF cut-off can suggest an AR component.
+- An ACF cut-off can suggest an MA component.
+- Gradual decay can indicate mixed ARMA behaviour.
+
+These are identification clues, not rigid rules. Consider multiple candidate models.
+
+### Manually estimating candidate ARIMA models
+
+```{r}
+m1 <-  Arima(nft_y, order = c(0,1,1))
+m2 <-  Arima(nft_y, order = c(1,1,1))
+m3 <-  Arima(nft_y, order = c(1,1,1))
+m4 <-  Arima(nft_y, order = c(2,1,1))
+```
+
+
+INTERPRETATION:
+Review coefficient estimates, standard errors, p-values and information criteria. Coefficients should be considered in the context of model specification and diagnostics.
+
+### Comparing AIC & BIC values
+
+```{r}
+AIC(m1,m2,m3,m4)
+BIC(m1,m2,m3,m4)
+```
+
+
+INTERPRETATION:
+- Lower AIC is preferred among comparable candidate models.
+- Lower BIC is preferred among comparable candidate models.
+- BIC generally penalises additional parameters more strongly than AIC.
+- Compare models estimated on the same data and under comparable likelihood assumptions.
+
+Do not select a model solely because it has the lowest AIC/BIC.
+
+#### Interpretation:
+
+- Based on AIC and BIC values, model1 , i.e m1 appears to be the efficient one.
+
+### Checking Model Accuracy
+
+```{r}
+cat("Accuracy ARIMA model m1:\n")
+print(accuracy(m1))
+cat("Accuracy ARIMA model m2:\n")
+print(accuracy(m2))
+cat("Accuracy ARIMA model m3:\n")
+print(accuracy(m3))
+cat("Accuracy ARIMA model m4:\n")
+print(accuracy(m4))
+```
+#### Interpretation
+
+* Among the four models, m4 produces the lowest training RMSE, MAE and MAPE. However, the differences in accuracy across the models are very small. Therefore, model selection should not be based solely on these training-set accuracy measures; residual diagnostics and out-of-sample forecasting performance should also be considered.
+
+### Model Diagnostics
+
+```{r}
+checkresiduals(m1)
+```
+
+
+INTERPRETATION:
+- Residuals should fluctuate around zero without a clear pattern.
+- Residual ACF spikes should mostly remain within the approximate significance bounds.
+- Ljung-Box p-value above 0.05: fail to reject the null of no residual autocorrelation at the tested lags.
+- Ljung-Box p-value below 0.05: evidence of remaining autocorrelation; the model may be inadequate.
+
+A good residual result does not guarantee accurate future forecasts, but it is an important adequacy check.
+
+### Model forecasting
+
+```{r}
+fc_m1 <- forecast(m1, h = 500)
+```
+
+### Plotting the forecasted values
+
+```{r}
+plot(fc_m1, main = "ARIMA forecast", xlab = "Time", ylab = "Price" )
+```
+
+### Creating future dates with the SAME length as forecast horizon
+
+```{r}
+last_date <- max(nift$Date)
+future_dates <- seq.Date(from = last_date + 1, 
+                         by = "day", length.out = length(fc_m1$mean))
+```
+
+### Forecast dataframe
+
+```{r}
+fc_nift <- data.frame(
+  Date = future_dates,
+  Forecast = as.numeric(fc_m1$mean)
+)
+```
+
+
+INTERPRETATION:
+- The forecast line is the model's point prediction.
+- Prediction intervals represent uncertainty around the forecast.
+- Intervals generally widen as the forecast horizon increases.
+- For market data, forecast dates should follow trading sessions rather than automatically assuming calendar days.
+
+### Actual dataframe
+
+```{r}
+actual_nift <- data.frame(
+  Date = nift$Date,
+  Price = nift$Price
+)
+```
+
+### Plot actual and forecast
+```{r}
+ggplot() +
+  geom_line(data = actual_nift, aes(x = Date, y = Price), color = "blue", 
+            linewidth = 1) +
+  geom_line(data = fc_nift, aes(x = Date, y = Forecast), color = "red", 
+            linewidth = 1) +
+  labs(
+    title = "Actual Series with ARIMA Forecast",
+    x = "Date",
+    y = "Price"
+  ) +
+  theme_minimal()+
+  theme(
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
+    plot.title   = element_text(hjust = 0.5)
+  )
+```
+
+==================== OUT-OF-SAMPLE AUTO-ARIMA\n============================================================
+##Out-sample
+
+```{r}
+# Load libraries
+```
+
+## Data import
+
+```{r}
+data_os <-  read_xlsx("D:/Msc BA Classnotes/Sem 3/Time series Analysis/Nifty 50.xlsx")
+data_os
+```
+
+### Data Cleaning
+
+```{r}
+# Clean data
+data_os$Date  <- as.Date(data_os$Date)
+data_os$Price <- as.numeric(gsub(",", "", data_os$Price))
+data_os <- data_os %>%
+  arrange(Date) %>%
+  na.omit()
+```
+
+# Creating zoo series
+
+```{r}
+zoo_price <- zoo(data_os$Price, order.by = data_os$Date)
+```
+
+# Plot zoo series
+
+```{r}
+plot(zoo_price,
+     main = "Nifty 50 Daily Price (Zoo Series)",
+     xlab = "Date",
+     ylab = "Price",
+     col  = "blue",
+     lwd  = 2)
+```
+### Convert to ts for ARIMA fitting
+
+```{r}
+ts_price <- ts(coredata(zoo_price))
+```
+
+### Fit ARIMA
+
+```{r}
+
+fit_full <- auto.arima(ts_price)
+summary(fit_full)
+```
+### Forecast 200 periods
+
+```{r}
+h <- 200
+fc_full <- forecast(fit_full, h = h)
+```
+
+### Create future dates 
+
+```{r}
+last_date    <- max(index(zoo_price))
+future_dates <- seq.Date(from = last_date + 1,
+                         by   = "day",
+                         length.out = h)
+```
+
+### Combine forecast data with dates
+
+```{r}
+fc_df <- data.frame(
+  Date     = future_dates,
+  Forecast = as.numeric(fc_full$mean)
+)
+```
+
+### Plot using ggplot so x-axis shows dates
+
+```{r}
+ggplot() +
+  geom_line(data = data_os,
+            aes(x = Date, y = Price),
+            color     = "black",
+            linewidth = 1) +
+  geom_line(data = fc_df,
+            aes(x = Date, y = Forecast),
+            color     = "red",
+            linewidth = 1)+
+  labs(
+    title = "Out-of-sample ARIMA Forecast",
+    x     = "Date",
+    y     = "Price"
+  ) +
+  theme_minimal() +
+  theme(
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 1),
+    plot.title   = element_text(hjust = 0.5)
+  )
+```
+========================== IN-SAMPLE / HOLDOUT AUTO-ARIMA\n============================================================
+
+### Loaded libraries
+
+```{r}
+```
+
+### Data Import
+
+```{r}
+data_is <- read_xlsx("D:/Msc BA Classnotes/Sem 3/Time series Analysis/Nifty 50.xlsx")
+data_is
+```
+### Clean data
+
+```{r}
+data_is$Date <- as.Date(data_is$Date)
+data_is$Price <- as.numeric(gsub(",", "", data_is$Price))
+data_is <- data_is %>%
+  arrange(Date) %>%
+  na.omit()
+```
+
+### Create zoo series
+
+```{r}
+zoo_price_is <- zoo(data_is$Price, order.by = data_is$Date)
+```
+
+### Split into 80% estimation and 20% forecast
+
+```{r}
+n <- length(zoo_price_is)
+train_size <- floor(0.8 * n)
+train_zoo <- zoo_price_is[1:train_size]
+```
+
+```{r}
+test_zoo <- zoo_price_is[(train_size + 1):n]
+```
+
+### Converting zoo to ts for ARIMA
+
+```{r}
+train_ts <- ts(coredata(train_zoo))
+```
+
+### Fit ARIMA on training sample
+
+```{r}
+fit_train <- auto.arima(train_ts)
+summary(fit_train)
+```
+### Forecast 20% holdout period
+
+```{r}
+fc_20 <- forecast(fit_train, h = length(test_zoo))
+```
+
+### Creating holdout results
+
+```{r}
+result_20 <- data.frame(
+  Date = index(test_zoo),
+  Actual = as.numeric(coredata(test_zoo)),
+  Forecast = as.numeric(fc_20$mean)
+)
+```
+
+### Create full actual series data frame
+
+```{r}
+full_actual <- data.frame(
+  Date = index(zoo_price),
+  Price = as.numeric(coredata(zoo_price))
+)
+```
+
+### Plot full actual series + 20% forecast
+
+```{r}
+ggplot() +
+  geom_line(data = full_actual, aes(x = Date, y = Price), color = "black", linewidth = 1) +
+  geom_line(data = result_20, aes(x = Date, y = Forecast), color = "red", linewidth = 1)+
+  labs(
+    title = "Nifty 50: Full Actual Series with 20% ARIMA Forecast",
+    x = "Date",
+    y = "Price"
+  ) +
+  theme_minimal() +
+  theme(
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 1)
+  )
+```
+### Accuracy measures for holdout
+
+```{r}
+mae_20 <- mean(abs(result_20$Actual - result_20$Forecast), na.rm = TRUE)
+rmse_20 <- sqrt(mean((result_20$Actual - result_20$Forecast)^2, na.rm = TRUE))
+
+cat("MAE:", mae_20, "\n")
+cat("RMSE:", rmse_20, "\n")
+```
+
+
+INTERPRETATION:
+- Lower MAE indicates a lower average absolute error.
+- Lower RMSE indicates lower squared-error loss and penalises large errors more strongly.
+- Compare models on the same test period and scale.
+- MAPE can be unsuitable when actual values are zero or close to zero.
+
+==================================\ VAR AND VECM MODELS\n=====================================
+
+## Sector wise time series analysis
+
+```{r}
+sector <- read_xlsx("D:/Msc BA Classnotes/Sem 3/Time series Analysis/SECTOR WISE.xlsx")
+sector
+```
+
+## Data cleaning
+
+```{r}
+# Convert Date
+sector$Date <- as.Date(sector$Date)
+
+# Remove missing observations
+sector <- na.omit(sector)
+```
+
+##Converting data into zoo series
+
+```{r}
+sec_z <- zoo(sector[,-1], order.by = sector$Date)
+plot(sec_z)
+```
+
+### Checking summary statistics
+
+```{r}
+summary(sec_z)
+```
+
+
+INTERPRETATION:
+Look for common movements, volatility episodes and trends. Similar movements do not by themselves establish causality or a dynamic relationship.
+
+### Checking peakedness and spread of data
+
+```{r}
+skewness(sec_z)
+```
+
+#### Interpretation:
+
+- All the sectors appear to be rightly skewed however Auto sector has more skewness towards right.
+
+```{r}
+kurtosis(sec_z)
+```
+
+#### Interpretation:
+
+- Except autosector, all other sectors have kurtosis less than 3 which means they are platykurtic with lesser tails or fewers extreme observations. Autosector is showing leptokurtic nature.
+
+```{r}
+par(mfrow = c(3, 2))
+
+for(i in 1:ncol(sec_z)) {
+  
+  plot(sec_z[, i],
+       main = colnames(sec_z)[i],
+       xlab = "Date",
+       ylab = "Value",
+       col = "blue")
+}
+```
+
+### Performing stationary test using ADF test
+
+$$
+\begin{aligned}
+H_0&:\text{Data is non stationary} \\
+H_1&:\text{Data is stationary}
+\end{aligned}
+$$
+
+```{r}
+adf.test(sec_z$Healthcare)
+adf.test(sec_z$FMCG)
+adf.test(sec_z$FS)
+adf.test(sec_z$Auto)
+adf.test(sec_z$Bank)
+```
+
+- The p-value is greater than 0.05, we fail to reject null hypothesis, there by concluding the data is non stationary.
+
+- To validate further let's perform kpss test
+
+
+INTERPRETATION:
+Use the ADF/KPSS null hypotheses explained in the ARIMA section. Do not assume that all variables have the same integration order; test them individually.
+
+### KPSS Test
+
+$$ 
+\begin{aligned}
+H_0&: \text{Data is stationary} \\ 
+H_1&: \text{Data is non stationary}
+\end{aligned}
+$$
+
+```{r}
+kpss.test(sec_z$Healthcare)
+kpss.test(sec_z$FMCG)
+kpss.test(sec_z$FS)
+kpss.test(sec_z$Auto)
+kpss.test(sec_z$Bank)
+```
+
+- The p-value is less than 0.01, we reject the null hypothesis that data is stationary and hereby conclude that the series is non-stationary.
+
+#### Generating return series
+
+```{r}
+ret_health <- diff(log(sec_z$Healthcare))
+ret_fmcg <- diff(log(sec_z$FMCG))
+ret_fs <- diff(log(sec_z$FS))
+ret_auto <- diff(log(sec_z$Auto))
+ret_bank <- diff(log(sec_z$Bank))
+```
+
+## Performing stationarity test on return series
+
+```{r}
+adf.test(ret_health)
+adf.test(ret_fmcg)
+adf.test(ret_fs)
+adf.test(ret_auto)
+adf.test(ret_bank)
+```
+
+- The p-value is less than 0.05, so we reject the null hypothesis, thereby concluding that series is stationary.
+
+### Combining the return series
+
+```{r}
+sec_y <- cbind(ret_health , ret_fmcg, ret_fs, ret_auto, ret_bank)
+sec_y
+```
+
+```{r}
+plot(sec_y)
+```
+
+#### Interpretation:
+
+The return series of the Healthcare, FMCG, Financial Services, Auto and Banking sectors fluctuate around zero without exhibiting a clear long-term trend. The series display occasional extreme positive and negative returns and periods of volatility clustering, with particularly pronounced fluctuations around 2020. The simultaneous large movements across several sectors suggest the presence of cross-sector dependence and common market shocks. Overall, the return series appear substantially more stable than the corresponding index-level series, supporting their use in subsequent time-series and volatility analysis.
+
+### Lag selection
+
+```{r}
+```
+
+```{r}
+lagselect <- VARselect(sec_y, lag.max = 10, type= "const")
+lagselect
+```
+
+
+INTERPRETATION:
+- Each information criterion proposes a lag order.
+- AIC/FPE may select longer lag structures.
+- SC/BIC often favours more parsimonious models.
+- Criteria can disagree. Use economic reasoning, sample size and residual diagnostics when deciding.
+
+#### Interpretation:
+
+\*\* The optimal lag-order selection criteria provide mixed results. The AIC and FPE criteria suggest seven lags, whereas the HQ and Schwarz (SC/BIC) criteria suggest one lag. Since the HQ and SC criteria both select one lag and favour a more parsimonious model, one lag may be considered as the preferred specification, subject to diagnostic testing.
+
+### Performing Johansen's cointegration test
+
+$$
+\begin{aligned}
+H_0&: \text{ There are no cointegration relationships}\\
+H_1&: \text{ There are cointegration relationships}
+\end{aligned}
+$$
+
+```{r}
+
+INTERPRETATION:
+- Begin with r = 0 (no cointegrating relationships).
+- Compare the trace statistic with its critical value, or use the reported p-value where available.
+- If r = 0 is rejected, move to r = 1.
+- Continue until the null is not rejected.
+- The sequential result indicates the estimated cointegration rank.
+
+Do not interpret one comparison in isolation; report the sequential rank decision and the deterministic specification.
+
+## Assuming lag as 2
+
+jo_test <- ca.jo(sec_z,
+                 type = "trace",
+                 ecdet ="trend",
+                 K = 2)
+```
+
+### Checking the summary
+
+```{r}
+summary(jo_test)
+```
+
+#### Interpretation:
+
+* We can observe that when r = 0, the test statistic(**97.99**) \> (**87.31**) so we reject the null hypothesis and hereby conclude that there is at-least one cointegrating relationship. Checking further values of r, we can conclude that there is atmost one cointegrating relationship. Even if the sectors show short term relationship between them, there can be mild long run relationship between the sectors.
+
+### Performing VECM test
+
+```{r}
+vecm_model <- cajorls(jo_test, r =1)
+summary(vecm_model$rlm)
+```
+
+INTERPRETATION:
+There are two main components:
+
+1. **Error-correction term (ECT):** indicates the previous period's deviation from long-run equilibrium.
+2. **Lagged differences:** describe short-run effects of changes in the variables.
+
+#### Interpretation: 
+
+** The VECM results indicate that the long-run equilibrium relationship is statistically significant for four of the five sectors. The error-correction coefficients for Healthcare (−0.000108, p < 0.001), Financial Services (−0.000207, p < 0.001), Auto (−0.000297, p < 0.001), and Bank (−0.000559, p < 0.001) are negative and statistically significant, indicating that these sectors adjust toward the long-run equilibrium following a deviation. Among these sectors, Banking exhibits the largest absolute adjustment coefficient, suggesting the strongest adjustment response, followed by Auto, Financial Services and Healthcare. In contrast, the error-correction coefficient for FMCG is statistically insignificant (p = 0.832), indicating that FMCG does not significantly adjust to restore the long-run equilibrium. The short-run dynamics are comparatively limited, with significant lagged effects primarily involving Healthcare, Financial Services and Banking.
+
+### Performing VAR test
+
+```{r}
+VAR1 <- VAR(sec_y, lag.max =1, type = "const",
+            season = NULL , exog = NULL)
+summary(VAR1)
+```
+```{r}
+stargazer(VAR1[["varresult"]], type = "text")
+```
+
+INTERPRETATION:
+Each equation has its own dependent variable. A coefficient on a lagged variable describes its conditional association with the current dependent variable, holding other included lagged variables constant.
+
+A statistically significant coefficient indicates evidence of a lagged association within the model. It does not automatically establish causation.
+
+#### Interpretation: 
+
+** The estimated VAR(1) model is stable, meaning that shocks to the system are not expected to persist indefinitely and the model is suitable for further VAR-based analysis such as impulse response and forecast error variance decomposition.
+
+** In the Healthcare equation, only the lagged Healthcare return is statistically significant (β = 0.0677, p < 0.01), indicating limited short-run persistence in Healthcare returns. Lagged returns of FMCG, Financial Services, Auto and Bank do not have statistically significant effects on current Healthcare returns.
+
+** There is no statistically significant evidence that the previous day's returns of any of the five sectors explain current FMCG returns.
+
+** The Financial Services equation shows significant short-run dependence on lagged Healthcare and Banking returns. Lagged Healthcare returns have a negative association with current Financial Services returns (β = −0.0659, p = 0.0119), while lagged Banking returns have a positive association (β = 0.1920, p = 0.0039). The lagged FS return itself is marginally significant at the 10% level.
+
+** Current Auto returns show weak evidence of dependence on lagged Financial Services returns, with a positive coefficient of 0.1155 (p = 0.0904). However, this relationship is only marginally significant at the 10% level.
+
+** The Banking equation indicates significant dependence on lagged Healthcare and Banking returns. Lagged Healthcare returns have a negative association with current Banking returns (β = −0.0711, p = 0.0100), while lagged Banking returns have a positive association (β = 0.1893, p = 0.0069), indicating short-run persistence in Banking returns.
+
+** Overall, the results suggest that cross-sector interdependence is stronger within the same trading period than through one-day lagged return transmission.
+
+### Model Diagnostics
+
+```{r}
+## Diagnostics for stable model
+roots(VAR1, modulus = TRUE) ## values to be less than one 
+
+
+INTERPRETATION:
+For a stable VAR, all companion-matrix root moduli should be below 1. In R, the interpretation of `roots()` output depends on the function's parameterisation; when requesting `modulus = TRUE`, values below 1 indicate stability.
+
+## Diagnostic test for VAR serial correlation
+serial1 = serial.test(VAR1, lags.pt = 10, type= "PT.asymptotic")
+serial1
+
+##Diagnostic test for VAR heteroscedasticity 
+
+ARCH1 = arch.test(VAR1, lags.multi = 10, multivariate.only = TRUE)
+ARCH1
+
+
+INTERPRETATION:
+- ARCH test null: no ARCH effects.
+- Normality test null: residuals are normally distributed.
+- p-value below 0.05 indicates evidence against the relevant null.
+- Non-normal residuals do not automatically invalidate every VAR use, but they can affect conventional inference and motivate robust methods.
+
+
+INTERPRETATION:
+- Null: no residual serial correlation up to the tested order.
+- p-value above 0.05: fail to reject the null.
+- p-value below 0.05: evidence of remaining serial correlation; reconsider lag order or specification.
+
+## Diagnostic for VAR Normality
+NORM1 = normality.test(VAR1, multivariate.only = TRUE)
+NORM1
+
+INTERPRETATION:
+- ARCH test null: no ARCH effects.
+- Normality test null: residuals are normally distributed.
+- p-value below 0.05 indicates evidence against the relevant null.
+- Non-normal residuals do not automatically invalidate every VAR use, but they can affect conventional inference and motivate robust methods.
+
+## Diagnostic for stability 
+stability1 = stability(VAR1, type = "OLS-CUSUM")
+stability1
+
+plot(stability1)
+```
+
+INTERPRETATION:
+If the fluctuation process stays within the critical boundaries, there is no detected instability under that test. Crossing the boundaries indicates evidence of instability.
+
+#### Interpretation:
+
+** The OLS-CUSUM stability plots indicate that the empirical fluctuation processes for all five equations remain within the critical boundaries throughout the sample period. This suggests that there is no significant evidence of parameter instability or structural breaks in the estimated relationships. Although some fluctuations are visible, particularly for the Auto equation during the later part of the sample, none of the processes crosses the critical boundaries. Hence, the estimated model demonstrates satisfactory parameter stability over the study period.
+
+### Granger-Causality test
+
+```{r}
+Granger1 = causality(VAR1, cause = "ret_auto")
+Granger1
+```
+```{r}
+Granger2 = causality(VAR1, cause = "ret_health")
+Granger2
+```
+```{r}
+Granger3 = causality(VAR1, cause = "ret_fs")
+Granger3
+```
+```{r}
+Granger4 = causality(VAR1, cause = "ret_bank")
+Granger4
+```
+```{r}
+Granger5 = causality(VAR1, cause = "ret_fmcg")
+Granger5
+```
+
+
+INTERPRETATION:
+- p-value below 0.05: reject the null; evidence of Granger-predictive content.
+- p-value above 0.05: fail to reject the null.
+- Granger causality is not proof of structural, economic or policy causation.
+
+### Impulse Response Function
+
+```{r}
+AUTOIRF_1 = irf(VAR1, impulse = "ret_bank", response  = "ret_auto",
+              n.ahead = 10, boot =TRUE) 
+
+plot(AUTOIRF_1, ylab = "ret_auto", mail = "shock from ret_bank")
+```
+
+```{r}
+AUTOIRF_2 = irf(VAR1, impulse = "ret_auto", response  = "ret_bank",
+              n.ahead = 10, boot =TRUE) 
+
+plot(AUTOIRF_2, ylab = "ret_bank", mail = "shock from ret_auto")
+```
+
+
+INTERPRETATION:
+- Identify the impulse variable (the variable receiving the shock).
+- Identify the response variable (the variable whose reaction is traced).
+- Positive response means movement above the baseline; negative response means movement below it.
+- Observe how quickly the response decays or persists.
+- Confidence intervals that include zero indicate that the response may not be statistically distinguishable from zero.
+
+Orthogonalised IRFs can depend on variable ordering. State the identification approach used.
+
+#### Interpretation:
+
+** 1 std.dev shock given to bank auto responded negatively for first 2 period and becomes positive for 3rd day.
+** 1 std.dev shock given to auto, bank responded positively for first 3 period and then market corrected.
+
+```{r}
+IRF_ALL = irf(VAR1, impulse = colnames(sec_y), 
+              response = colnames(sec_y),
+              n.ahead = 10,
+              boot = TRUE, 
+              ci = 0.95,
+              runs = 100)
+IRF_ALL
+```
+### Variance Decomposition
+
+```{r}
+FEVDI = fevd(VAR1, n.ahead = 10)
+```
+
+```{r}
+plot(FEVDI)
+```
+
+```{r}
+FEVDI[["ret_health"]]
+FEVDI[["ret_fmcg"]]
+FEVDI[["ret_fs"]]
+FEVDI[["ret_auto"]]
+FEVDI["ret_bank"]
+```
+
+INTERPRETATION:
+- A high own-shock share means the variable's own innovations explain most of its forecast error variance.
+- A larger contribution from another variable suggests greater cross-variable influence within the model.
+- Contributions for a given variable and horizon sum to 100%.
+- FEVD is conditional on the model and shock-identification method.
+
+#### Interpretation:
+
+* The FEVD results indicate that the forecast error variance of Healthcare returns is predominantly explained by its own innovations. At the first forecast horizon, 100% of the variance is attributable to shocks in Healthcare itself. By the second horizon, approximately 99.95% remains attributable to Healthcare shocks, while FMCG and Bank contribute only around 0.023% and 0.022%, respectively. The contributions of FS and Auto are negligible. From the third horizon onward, the decomposition remains virtually unchanged, indicating that cross-sector shocks have very limited explanatory power for the forecast error variance of Healthcare returns within the model.
+
+```{r}
+##VAR Forecasting
+forecast=predict(VAR1,n.ahead = 10,cl=0.95)
+fanchart(forecast,names = "ret_auto")
+fanchart(forecast,names = "ret_bank")
+
+
+```\n\n===================================\nSECTION 6 – GARCH MODELS\n============================================================
+
+
+----------------------------------------------------------------------------------------
+
+STEP-2: DATA IMPORT
+----------------------------------------------------------------------------------------
+
+data <- read_excel("D:/Msc BA Classnotes/Sem 3/Time series Analysis/GARCH.xlsx")
+head(data)
+
+----------------------------------------------------------------------------------------
+STEP 3: CONVERTING DATA INTO ZOO SERIES
+----------------------------------------------------------------------------------------
+
+data_g <- read.zoo(data.frame(data), FUN = as.Date, format ='%d%m%Y')
+plot(data_g)
+
+----------------------------------------------------------------------------------------
+STEP 4: DATA CLEANING
+----------------------------------------------------------------------------------------
+
+str(data_g)
+
+data_g <- na.omit(data_g)
+
+----------------------------------------------------------------------------------------
+STEP 5: CHECKING STATIONARITY ON RAW SERIES
+
+INTERPRETATION:
+Apply the same ADF and KPSS null-hypothesis logic described in the ARIMA section. If the returns are not stationary, investigate the data and mean specification before fitting GARCH.
+
+----------------------------------------------------------------------------------------
+
+adf.test(data_g$Nifty)
+
+adf.test(data_g$Gold)
+
+adf.test(data_g$Crude)
+
+----------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+STEP:6 CREATING RETURN SERIES
+----------------------------------------------------------------------------------------
+
+data_g$Nifty <- as.numeric(as.character(data_g$Nifty))
+
+nifty_ret <- diff(log(data_g$Nifty))
+gold_ret <- diff(log(data_g$Gold))
+crude_ret <- diff(log(data_g$Crude))
+
+----------------------------------------------------------------------------------------
+STEP 7: CHECKING STATIONARITY OF RETURN SERIES
+
+INTERPRETATION:
+Apply the same ADF and KPSS null-hypothesis logic described in the ARIMA section. If the returns are not stationary, investigate the data and mean specification before fitting GARCH.
+
+----------------------------------------------------------------------------------------
+
+adf.test(nifty_ret)
+
+adf.test(gold_ret)
+
+adf.test(crude_ret)
+
+----------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+STEP 8: CREATING DATAFRAME OF RETURN SERIES
+----------------------------------------------------------------------------------------
+
+yy <- cbind.zoo(nifty_ret, gold_ret, crude_ret)
+
+----------------------------------------------------------------------------------------
+STEP 9: VISUALIZING THE RETURN SERIES
+----------------------------------------------------------------------------------------
+
+## Volatility clustering
+
+plot(yy)
+
+----------------------------------------------------------------------------------------
+STEP 10: ARCH EFFECT
+
+INTERPRETATION:
+- p-value below 0.05: reject the null; evidence of ARCH effects, supporting a conditional volatility model.
+- p-value above 0.05: fail to reject the null; insufficient evidence of ARCH effects at the tested lag order.
+
+The test result depends on the residuals, lag order and mean specification.
+
+----------------------------------------------------------------------------------------
+
+ArchTest(nifty_ret)
+
+ArchTest(gold_ret)
+
+ArchTest(crude_ret)
+
+----------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+STEP-11: SERIAL CORRELATION TEST
+
+INTERPRETATION:
+Inspect mean-equation coefficients and residual autocorrelation. The mean model and variance model serve different purposes: the former describes expected returns; the latter describes conditional risk.
+
+----------------------------------------------------------------------------------------
+
+Box.test(nifty_ret, lag = 10, type = "Ljung-Box")
+
+Box.test(gold_ret, lag = 10, type = "Ljung-Box")
+
+Box.test(crude_ret, lag = 10, type = "Ljung-Box")
+
+----------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+STEP 12: NORMALITY TEST
+
+INTERPRETATION:
+- Mean: average return over the sample.
+- Standard deviation: unconditional dispersion of returns.
+- Positive skewness: longer right tail.
+- Negative skewness: longer left tail.
+- High excess kurtosis: heavier tails and more extreme observations than a normal distribution.
+
+Heavy tails may motivate Student-t or another non-normal innovation distribution.
+
+----------------------------------------------------------------------------------------
+
+jarque.bera.test(nifty_ret)
+
+jarque.bera.test(gold_ret)
+
+jarque.bera.test(crude_ret)
+
+----------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+STEP 13: PERFORMING GARCH MODEL
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+NOTE:
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+ESTIMATING USING VARIANCE MODEL
+
+INTERPRETATION:
+- \(\omega\): baseline variance component; typically expected to be positive.
+- \(\alpha\): reaction of volatility to recent news/shocks.
+- \(\beta\): persistence of past conditional variance.
+- \(\alpha+\beta\): often used as a summary of volatility persistence in a standard GARCH(1,1), subject to model assumptions.
+
+A larger \(\alpha\) indicates stronger immediate response to shocks. A larger \(\beta\) indicates greater dependence on previous volatility.
+
+----------------------------------------------------------------------------------------
+
+spec = ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
+                  mean.model = list(armaOrder = c(0,0)), distribution.model = "std")
+fit_1 = ugarchfit(spec= spec, data=nifty_ret)
+fit_1
+
+fit_2 = ugarchfit(spec= spec, data=gold_ret)
+fit_2
+
+fit_3 = ugarchfit(spec= spec, data=crude_ret)
+fit_3
+
+----------------------------------------------------------------------------------------
+ESTIMATING USING MEAN MODEL
+
+INTERPRETATION:
+Inspect mean-equation coefficients and residual autocorrelation. The mean model and variance model serve different purposes: the former describes expected returns; the latter describes conditional risk.
+
+----------------------------------------------------------------------------------------
+
+spec_1 = ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
+                  mean.model = list(armaOrder = c(1,1)), distribution.model = "std")
+fit_4 = ugarchfit(spec= spec_1, data=nifty_ret)
+fit_4
+
+fit_5 = ugarchfit(spec= spec_1, data=gold_ret)
+fit_5
+
+fit_6 = ugarchfit(spec= spec_1, data=crude_ret)
+fit_6
+
+----------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+DIAGNOSTIC
+----------------------------------------------------------------------------------------
+
+plot(fit_1, which= "all")
+
+----------------------------------------------------------------------------------------
+DIAGNOSTICS
+
+INTERPRETATION:
+- Standardised residual ACF: checks remaining mean dependence.
+- Squared standardised residual ACF: checks remaining volatility dependence.
+- Ljung-Box test on standardised residuals: assesses residual serial correlation.
+- ARCH-LM test on standardised residuals: assesses remaining ARCH effects.
+- p-value above 0.05: fail to reject the relevant null at the tested lags.
+- p-value below 0.05: evidence of remaining structure; model may need revision.
+
+Also inspect whether standardised residuals have heavy tails relative to the assumed innovation distribution.
+
+----------------------------------------------------------------------------------------
+
+residuals_fit1 = residuals(fit_1, standardize =  TRUE)
+
+Box.test(residuals_fit1, lag = 10, type = "Ljung-Box")
+
+ArchTest(residuals_fit1, lags = 10)
+
+##Forecast volatility 
+forecast = ugarchforecast(fit_1, n.ahead = 10)
+plot(forecast, which = 3)
+
+plot(fit_2, which= "all")
+
+residuals_fit2 = residuals(fit_2, standardize =  TRUE)
+
+Box.test(residuals_fit2, lag = 10, type = "Ljung-Box")
+
+ArchTest(residuals_fit2, lags = 10)
+
+##Forecast volatility 
+forecast = ugarchforecast(fit_2, n.ahead = 10)
+plot(forecast, which = 3)
+
+plot(fit_3, which= "all")
+
+residuals_fit3 = residuals(fit_3, standardize =  TRUE)
+
+Box.test(residuals_fit3, lag = 10, type = "Ljung-Box")
+
+ArchTest(residuals_fit3, lags = 10)
+
+##Forecast volatility 
+forecast = ugarchforecast(fit_3, n.ahead = 10)
+plot(forecast, which = 3)
+
+----------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+EGARCH MODEL
+
+INTERPRETATION:
+- Standard GARCH: symmetric response to positive and negative shocks of equal magnitude.
+- GJR-GARCH: includes an indicator term to allow negative shocks to have an additional effect.
+- EGARCH: models log variance and can capture asymmetric responses without the same non-negativity constraints.
+- Student-t innovations: allow heavier tails than the normal distribution.
+
+Compare information criteria, coefficient significance and residual diagnostics rather than selecting a model by name alone.
+
+----------------------------------------------------------------------------------------
+
+spec_e = ugarchspec(variance.model = list(model = "eGARCH", garchOrder = c(1,1)),
+                  mean.model = list(armaOrder = c(0,0)))
+fit_7 = ugarchfit(spec= spec_e, data=nifty_ret)
+fit_7
+
+----------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+DIAGNOSTIC TEST
+----------------------------------------------------------------------------------------
+
+plot(fit_7, which = "all")
+
+residuals_fit7 <- residuals(fit_7, standardize = TRUE)
+
+acf(residuals_fit7, main = "ACF of Standardized Residuals")
+
+Box.test(residuals_fit7, lag = 20, type = "Ljung-Box")
+
+----------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
+
+# ARCH test on residuals
+ArchTest(residuals_fit7, lags = 12)
+
+forecast <- ugarchforecast(fit_7, n.ahead=10)
+plot(forecast, which = 3)
+
+fit_8 = ugarchfit(spec= spec_e, data=gold_ret)
+fit_8
+
+----------------------------------------------------------------------------------------
+DIAGNOSTIC
+----------------------------------------------------------------------------------------
+
+plot(fit_8, which = "all")
+
+residuals_fit8 <- residuals(fit_8, standardize = TRUE)
+
+acf(residuals_fit8, main = "ACF of Standardized Residuals")
+
+Box.test(residuals_fit8, lag = 20, type = "Ljung-Box")
+
+# ARCH test on residuals
+ArchTest(residuals_fit8, lags = 12)
+
+forecast <- ugarchforecast(fit_8, n.ahead=10)
+plot(forecast, which = 3)
+
+fit_9 = ugarchfit(spec= spec_e, data=crude_ret)
+fit_9
+
+plot(fit_9, which = "all")
+
+residuals_fit9 <- residuals(fit_9, standardize = TRUE)
+
+acf(residuals_fit9, main = "ACF of Standardized Residuals")
+
+Box.test(residuals_fit9, lag = 20, type = "Ljung-Box")
+
+# ARCH test on residuals
+ArchTest(residuals_fit9, lags = 12)
+
+forecast <- ugarchforecast(fit_9, n.ahead=10)
+plot(forecast, which = 3)
+
+----------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
+
+nse_tgarch =ugarchspec(variance.model = list(model="gjrGARCH", garchOrder = c(1,1)), 
+                       mean.model = list(armaOrder = c(0,0)))
+
+nse_tgarch.fit_10 = ugarchfit(nse_tgarch, data = nifty_ret)
+
+nse_tgarch.fit_10
+
+----------------------------------------------------------------------------------------
+MODEL DIAGNOSTICS
+----------------------------------------------------------------------------------------
+
+plot(nse_tgarch.fit_10, which = "all")
+
+residuals_fit10 <- residuals(nse_tgarch.fit_10, standardize = TRUE)
+
+acf(residuals_fit10, main = "ACF of Standardized Residuals")
+
+Box.test(residuals_fit10, lag = 20, type = "Ljung-Box")
+
+# ARCH test on residuals
+ArchTest(residuals_fit10, lags = 12)
+
+forecast <- ugarchforecast(nse_tgarch.fit_10, n.ahead=10)
+plot(forecast, which = 3)
+
+----------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
+
+nse_tgarch.fit_11 = ugarchfit(nse_tgarch, data = gold_ret)
+
+nse_tgarch.fit_11
+
+----------------------------------------------------------------------------------------
+PERFORMING MODEL DIAGNOSTICS
+----------------------------------------------------------------------------------------
+
+plot(nse_tgarch.fit_11, which = "all")
+
+residuals_fit11 <- residuals(nse_tgarch.fit_11, standardize = TRUE)
+
+acf(residuals_fit11, main = "ACF of Standardized Residuals")
+
+Box.test(residuals_fit11, lag = 20, type = "Ljung-Box")
+
+# ARCH test on residuals
+ArchTest(residuals_fit10, lags = 12)
+
+forecast <- ugarchforecast(nse_tgarch.fit_11, n.ahead=10)
+plot(forecast, which = 3)
+
+----------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
+
+nse_tgarch.fit_12 = ugarchfit(nse_tgarch, data = crude_ret)
+
+nse_tgarch.fit_12
+
+----------------------------------------------------------------------------------------
+PERFORMING MODEL DIAGNOSTICS
+----------------------------------------------------------------------------------------
+
+plot(nse_tgarch.fit_12, which = "all")
+
+residuals_fit12 <- residuals(nse_tgarch.fit_12, standardize = TRUE)
+
+acf(residuals_fit12, main = "ACF of Standardized Residuals")
+
+Box.test(residuals_fit11, lag = 20, type = "Ljung-Box")
+
+# ARCH test on residuals
+ArchTest(residuals_fit12, lags = 12)
+
+forecast <- ugarchforecast(nse_tgarch.fit_12, n.ahead=10)
+plot(forecast, which = 3)
+
+----------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------
+MULTIVARIATE GARCH
+
+INTERPRETATION:
+- DCC-GARCH estimates time-varying conditional correlations. Values near +1 indicate strong positive co-movement, near -1 strong negative co-movement, and near 0 weak linear co-movement.
+
+----------------------------------------------------------------------------------------
+
+uspec = ugarchspec(
+  mean.model = list(armaOrder = c(0,0)),
+  variance.model = list(garchOrder = c(1,1), model = "sGARCH"),
+  distribution.model = "norm"
+)
+
+specm = dccspec(uspec = multispec(replicate(3,uspec)), dccOrder = c(1,1), 
+                distribution = "mvnorm")
+
+modelfit = dccfit(specm,data = data.frame(yy))
+modelfit
+
+H = rcov(modelfit)
+R = rcor(modelfit)
+
+plot(rcov(modelfit))
+
+plot(rcor(modelfit))
+
+num_assets <- ncol(yy)
+
+# Plotting individual correlation pairs
+
+for (i in 1:(num_assets - 1)) {
+  for (j in (i + 1):num_assets) {
+    plot(R[i, j, ],
+         type = "l",
+         main = paste("Dynamic Conditional Correlation:", colnames(yy)[i], "vs", colnames(yy)[j]),
+         xlab = "Time",
+         ylab = "Correlation")
+    grid()
+  }
+}
+
+#BEKK model
+
+# Convert returns to matrix
+Y <- as.matrix(yy)
+
+# BEKK(1,1) specification
+spec <- bekk_spec(
+  model = list(
+    type = "bekk",
+    asymmetric = FALSE
+  )
+)
+
+# Estimate BEKK-GARCH with t-ratios
+fit <- bekk_fit(
+  spec,
+  Y,
+  QML_t_ratios = TRUE
+)
+
+# Model results
+summary(fit)
+
+#P value estiamtion Shock spillover
+A_pvalue <- 2 * (1 - pnorm(abs(fit$A_t)))
+cat("\nA Matrix - Estimates\n")
+
+print(fit$A)
+
+cat("\nA Matrix - t-values\n")
+
+print(fit$A_t)
+
+cat("\nA Matrix - p-values\n")
+
+print(A_pvalue)
+
+#P value estiamtion volatility spillover
+G_pvalue <- 2 * (1 - pnorm(abs(fit$G_t)))
+cat("\nG Matrix - Estimates\n")
+
+print(fit$G)
+
+cat("\nG Matrix - t-values\n")
+
+print(fit$G_t)
+
+cat("\nG Matrix - p-values\n")
+
+print(G_pvalue)
+
+========================================================================================
+END OF EXTRACTED R CODES
+\n\n
+============================================================
+INTERPRETATION NOTES – GARCH MODELS
+============================================================
+
+1. DATA IMPORT, CLEANING AND PRICE PLOTS
+- Confirm that the date index is correctly parsed, observations are chronological, and price columns are numeric.
+- Check that all prices are positive before calculating log returns.
+- Remove or investigate missing values; do not silently remove large blocks of data without checking their cause.
+
+2. RAW-SERIES STATIONARITY
+- ADF null hypothesis: the series has a unit root (non-stationary).
+- ADF p-value below 0.05: reject the unit-root null; evidence supports stationarity.
+- ADF p-value above 0.05: fail to reject the unit-root null; insufficient evidence of stationarity.
+- Price/index levels are often non-stationary. This does not by itself mean the return series is non-stationary.
+
+3. RETURN SERIES
+- `diff(log(price))` gives continuously compounded returns; multiply by 100 if percentage units are preferred.
+- Log returns are approximately percentage changes for small movements.
+- Confirm that all return series use the same dates before combining them.
+
+4. DESCRIPTIVE STATISTICS AND DISTRIBUTION
+- Positive skewness indicates a longer/right tail; negative skewness indicates a longer/left tail.
+- Kurtosis above 3 (under the conventional Pearson definition) indicates heavier tails than a normal distribution; below 3 indicates lighter tails.
+- Financial returns often exhibit fat tails, so a normality rejection is common and can motivate a Student-t innovation distribution.
+- Check the package's kurtosis convention before interpreting the benchmark value.
+
+5. RETURN-SERIES STATIONARITY
+- ADF p-value below 0.05 supports stationarity of returns.
+- A stationary mean does not imply constant variance. Volatility can still change over time.
+
+6. VOLATILITY CLUSTERING
+- Volatility clustering means large absolute movements tend to be followed by large movements, and small movements by small movements.
+- A return plot can reveal clustering, but formal ARCH testing is needed to assess conditional heteroskedasticity.
+
+7. ARCH EFFECT TEST
+- ARCH-LM null hypothesis: no ARCH effects (no conditional heteroskedasticity up to the tested lag order).
+- p-value below 0.05: reject the null; evidence of ARCH effects. A conditional-volatility model may be appropriate.
+- p-value above 0.05: fail to reject the null; the test does not detect ARCH effects at the chosen lag order.
+
+8. SERIAL CORRELATION TEST
+- Ljung-Box null hypothesis: no autocorrelation up to the selected lag.
+- p-value above 0.05: fail to reject the null; no significant serial correlation detected at the tested lags.
+- p-value below 0.05: evidence of remaining serial correlation. Consider whether the mean equation needs ARMA terms.
+- Test returns and standardized residuals separately; they answer different diagnostic questions.
+
+9. NORMALITY TEST
+- Jarque-Bera null hypothesis: skewness and kurtosis are consistent with normality.
+- p-value below 0.05: reject normality.
+- Non-normal returns do not automatically rule out GARCH. Consider an appropriate innovation distribution, such as Student-t, and inspect standardized residuals.
+
+10. sGARCH(1,1) MODEL
+- The conditional variance equation includes a constant, a lagged squared innovation (ARCH effect) and a lagged conditional variance (GARCH effect).
+- `alpha1` measures the response of volatility to recent shocks.
+- `beta1` measures volatility persistence.
+- `alpha1 + beta1` close to 1 indicates highly persistent volatility; a value below 1 is commonly associated with covariance-stationary variance under standard conditions.
+- Check parameter constraints and convergence before interpreting estimates.
+- A significant ARCH parameter indicates that recent shocks help explain current volatility; a significant GARCH parameter indicates persistence.
+
+11. MEAN EQUATION
+- ARMA terms model serial dependence in the conditional mean.
+- Compare mean specifications using diagnostics and information criteria, not just coefficient significance.
+- The mean equation and variance equation serve different purposes.
+
+12. MODEL DIAGNOSTICS
+- Standardized residuals should have no substantial remaining autocorrelation.
+- Ljung-Box test on standardized residuals: p-value above 0.05 is consistent with no detected serial correlation.
+- ARCH-LM test on standardized residuals: p-value above 0.05 is consistent with no remaining ARCH effect.
+- Inspect residual ACF and diagnostic plots as well as test p-values.
+- A good volatility model should capture conditional heteroskedasticity without leaving substantial structure in standardized residuals.
+
+13. VOLATILITY FORECASTING
+- `ugarchforecast()` produces forecasts of conditional mean and/or conditional variance.
+- The conditional sigma forecast represents the modelled volatility, not the forecasted asset price.
+- Volatility forecasts are conditional on the fitted model and generally revert toward the model's long-run variance when the model is mean-reverting.
+- Clearly state the forecast horizon and the units used for returns/volatility.
+
+14. EGARCH AND GJR-GARCH
+- EGARCH models log conditional variance and can capture asymmetric responses to positive and negative shocks.
+- GJR-GARCH adds an asymmetric term so negative and positive shocks can have different volatility effects.
+- In these models, interpret the asymmetry parameter according to the exact parameterisation and software output; do not assume the sign has the same meaning across every implementation.
+- Compare alternative specifications using information criteria, convergence, parameter plausibility and standardized-residual diagnostics.
+
+15. DCC-GARCH
+- DCC-GARCH models time-varying conditional correlations between multiple return series.
+- `rcor()` extracts dynamic conditional correlations; `rcov()` extracts conditional covariance matrices.
+- Correlations near +1 indicate strong positive co-movement; near -1 indicate strong negative co-movement; near 0 indicates weak linear co-movement.
+- A changing correlation series indicates that diversification relationships vary over time.
+- DCC estimates are conditional on the chosen univariate volatility specifications and model assumptions.
+
+16. BEKK-GARCH
+- BEKK models conditional covariance dynamics and can represent volatility and shock spillovers across series.
+- Interpret the estimated matrices, t-statistics and p-values according to the package's parameterisation.
+- A statistically significant off-diagonal element may provide evidence of cross-market shock/volatility transmission within the fitted model.
+- Statistical significance is not, by itself, proof of economic causality.
+
+
+2. In R, install TinyTeX:
+   install.packages("tinytex")
+   tinytex::install_tinytex()
